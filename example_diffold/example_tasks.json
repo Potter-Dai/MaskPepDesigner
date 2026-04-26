@@ -1,0 +1,28 @@
+{
+    "denovo_design": {
+        "contig": "100",
+        "num_replica": 10
+    },
+    "folding": {
+        "pdb": "101m",
+        "contig": "*A1-153",
+        "num_replica": 10,
+        "calc_metrics": true
+    },
+    "inverse_folding": {
+        "pdb": "101m",
+        "contig": "$A1-153",
+        "num_replica": 10,
+        "calc_metrics": true
+    },
+    "scaffolding": {
+        "pdb": "101m",
+        "contig": "A59-69/10-20/A22-30",
+        "num_replica": 10
+    },
+    "inpainting": {
+        "pdb": "101m",
+        "contig": "A1-96/25-35/A125-153",
+        "num_replica": 10
+    }
+}
