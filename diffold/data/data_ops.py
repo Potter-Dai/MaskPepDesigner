@@ -315,10 +315,130 @@ OBSERVED_PROB_FN = {
 }
 
 
+def generate_training_gammas_v3(
+    seed: int,
+    shape: Tuple[int],
+    dtype: torch.dtype,
+    codesign_prob: float,
+    s: float,
+    K: int,
+    observed_prob_kernel: str,
+    denovo_prob: float,
+    max_observed_prob: float,
+    **kwargs,
+) -> TensorDict:
+    raise NotImplementedError("depreciated.")
+    seeds = (seed, 0)       # explicitly add an addl seed 0 for unicore issue.
+    with numpy_seed(*seeds, key="diff_mask_type"):
+        use_codesign = flip(codesign_prob)
+
+    with numpy_seed(*seeds, key="diff_mask_prob"):
+        observed_prob = np.random.rand() # [0, 1)
+    
+    with numpy_seed(*seeds, key="diff_t"):
+        t = np.random.rand()
+
+    gamma = improved_ddpm_kernel(t, s, T=1)
+    observed_prob = OBSERVED_PROB_FN[observed_prob_kernel](
+        observed_prob, low=denovo_prob, high=max_observed_prob
+    )  # [0, max_obs_prob)
+
+    seqlen = shape[-1]
+    if observed_prob < 0.1:  # <==> prob = 0, i.e de novo generation.
+        is_observed_seq = torch.zeros(shape)
+        is_observed_frame = torch.zeros(shape)
+    elif use_codesign:    # shared seq & frame mask
+        is_observed_seq = locally_continuous_mask(
+            seqlen,
+            observed_prob,   # prob is the ratio of 1s. which is to be kept undiffed.
+            K=K,
+            seeds=seeds,
+            key="codesign_diff_mask"
+        )
+        is_observed_frame = is_observed_seq
+    else:               # individual seq & frame mask
+        is_observed_seq = locally_continuous_mask(
+            seqlen,
+            observed_prob,
+            K=K,
+            seeds=seeds,
+            key="seq_diff_mask"
+        )
+        is_observed_frame = locally_continuous_mask(
+            seqlen,
+            observed_prob,
+            K=K,
+            seeds=seeds,
+            key="frame_diff_mask"
+        )
+    seq_gammas = gamma + is_observed_seq.type(dtype) * (1. - gamma)
+    frame_gammas = gamma + is_observed_frame.type(dtype) * (1. - gamma)
+    return seq_gammas, frame_gammas
+
+
 GAMMA_FN = {
     "v3": generate_training_gammas_v3,
     # "v4": generate_training_gammas,
 }
+
+
+@curry1
+def generate_gammas(
+    protein: TensorDict,
+    seed: int,
+    task: str,
+    gamma_schema: ConfigDict,
+):
+    """
+    Generate the gammas which controls the noise scales of the sequence and
+        structure. Output gammas are equivalent to the \\bar{\\alpha}s in 
+        ddpms. Tntuitively, gammas are signal ratios: gamma -> 1 indicates no 
+        noises; gamma -> 0 indicates all noises no signal.
+    """
+    raise NotImplementedError("depreciated.")
+
+    seq_mask = protein["seq_mask"]
+    frame_mask = protein["frame_mask"]
+
+    if task == "train":
+        gamma_fn = GAMMA_FN[gamma_schema.version]
+        seq_gammas, frame_gammas = gamma_fn(seed, seq_mask.shape, seq_mask.dtype, **gamma_schema)
+    elif task == "eval_fold":
+        seq_gammas = torch.ones_like(seq_mask)
+        frame_gammas = torch.zeros_like(seq_mask)
+    elif task == "eval_invfold":
+        seq_gammas = torch.zeros_like(seq_mask)
+        frame_gammas = torch.ones_like(seq_mask)
+    elif task == "eval_denovo":
+        seq_gammas = torch.zeros_like(seq_mask)
+        frame_gammas = torch.zeros_like(seq_mask)
+    elif task == "eval_inpaint":
+        seq_gammas = 1. - locally_continuous_mask(seq_mask.shape[-1], 0.2, K=6, seeds=(seed, 0), key="seq_lcm")
+        frame_gammas = seq_gammas
+    elif task == "eval_scaffold":
+        seq_gammas = 1. - locally_continuous_mask(seq_mask.shape[-1], 0.8, K=6, seeds=(seed, 0), key="seq_lcm")
+        frame_gammas = seq_gammas
+    else:
+        raise ValueError(f"unknown task {task}")
+
+    # for residues w/o known seq / frames, ensure they are sampled from prior.
+    seq_gammas *= seq_mask
+    frame_gammas *= frame_mask
+
+    protein.update({
+        "seq_gammas": seq_gammas,
+        "frame_gammas": frame_gammas
+    })
+
+    return protein
+
+
+@curry1
+def diffuse(protein, transition, seed: int):
+    raise NotImplementedError("depreciated.")
+    diffused_vars = transition.add_noise(protein, seed)
+    protein.update(diffused_vars)
+    return protein
 
 
 @curry1
@@ -332,6 +452,19 @@ def make_noisy_quats(protein, enable=False):
     protein["diffused_quats"] = torch.cat([quat, trans.squeeze(-1)], dim=-1)
     return protein
 
+
+@curry1
+def make_target_feat(protein, num_classes):
+    """Create and concatenate MSA features."""
+    raise NotImplementedError("depreciated.")
+    aatype_1h = one_hot(protein["diffused_aatype"], num_classes)
+    target_feat = [
+        aatype_1h,
+        protein["seq_gammas"][..., None],       # [*, L, 1]
+        protein["frame_gammas"][..., None],     # [*, L, 1]
+    ]
+    protein["target_feat"] = torch.cat(target_feat, dim=-1)
+    return protein
 
 # crop & pad utils
 

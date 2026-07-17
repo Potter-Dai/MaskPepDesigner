@@ -9,14 +9,23 @@ def reconstruct_complex(
     generated_pdb_path: str,
     output_pdb_path: str,
     peptide_chain_id: str = 'B',
+    original_receptor_chain: str = None,
 ):
     """
     Aligns the generated incomplete protein-peptide complex to the full protein
     and saves the aligned generated complex PDB.
+
+    Args:
+        original_receptor_chain: 原始 PDB 中 receptor 的链名。如果提供，
+            则只加载该链作为参考（避免 peptide 链残基编号冲突）。
+            如果为 None，则加载整个原始 PDB。
     """
     print(f"Processing: original={original_pdb_path}, generated={generated_pdb_path}")
     print("Loading structures...")
-    full_receptor = Structure(original_pdb_path)
+    if original_receptor_chain:
+        full_receptor = Structure(original_pdb_path, chains=original_receptor_chain)
+    else:
+        full_receptor = Structure(original_pdb_path)
     generated_complex = Structure(generated_pdb_path)
 
     generated_peptide_atoms = []
@@ -30,26 +39,38 @@ def reconstruct_complex(
     temp_generated_receptor = Structure(generated_pdb_path, atoms=generated_receptor_atoms)
 
     print("Identifying common backbone atoms as anchors...")
-    # 2. 识别共同的骨架原子作为锚点 (优化)
+    # 2. 识别共同的骨架原子作为锚点
+    #    生成的 PDB 强制 protein=A, peptide=B，但原始 PDB 链名可能不同
+    #    因此用 chain-agnostic 的 (resid, aa) 来匹配共同残基
     ref_coords = []      # 来自完整蛋白的锚点原子坐标 (参考)
     mobile_coords = []   # 来自不完整蛋白的锚点原子坐标 (移动)
     
-    # 使用骨架原子进行更稳健的对齐
     backbone_atoms = ['N', 'CA', 'C', 'O']
-    full_receptor_res_keys = full_receptor.residues.keys()
 
-    for res_key in temp_generated_receptor.residues.keys():
-        if res_key in full_receptor_res_keys:
-            # 这是一个共同残基，遍历其骨架原子
-            for atom_name in backbone_atoms:
-                try:
-                    mobile_coord_key = f"{res_key}_{atom_name}"
-                    
-                    mobile_coords.append(temp_generated_receptor.coords[mobile_coord_key])
-                    ref_coords.append(full_receptor.coords[mobile_coord_key])
-                except KeyError:
-                    print(f"Info: Skipping atom {mobile_coord_key} as it's not found in both structures.")
-                    continue
+    # 构建 chain-agnostic 索引: "resid_aa" -> 原始 chain-prefixed res_key
+    def strip_chain(res_key):
+        """'B_7_G' -> '7_G'"""
+        parts = res_key.split('_', 1)
+        return parts[1] if len(parts) > 1 else res_key
+
+    full_res_by_nochain = {}
+    for rk in full_receptor.residues.keys():
+        full_res_by_nochain[strip_chain(rk)] = rk
+
+    for gen_res_key in temp_generated_receptor.residues.keys():
+        nochain_key = strip_chain(gen_res_key)
+        if nochain_key not in full_res_by_nochain:
+            continue
+        orig_res_key = full_res_by_nochain[nochain_key]
+        # 这是一个共同残基，遍历其骨架原子
+        for atom_name in backbone_atoms:
+            try:
+                mobile_coord_key = f"{gen_res_key}_{atom_name}"
+                ref_coord_key = f"{orig_res_key}_{atom_name}"
+                mobile_coords.append(temp_generated_receptor.coords[mobile_coord_key])
+                ref_coords.append(full_receptor.coords[ref_coord_key])
+            except KeyError:
+                continue
 
     if len(ref_coords) < 3:
         raise ValueError(f"Found only {len(ref_coords)} common anchor atoms. At least 3 are required for stable alignment. Check chain IDs and residue numbering.")

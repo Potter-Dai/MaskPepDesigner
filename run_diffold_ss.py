@@ -14,7 +14,6 @@ from diffold.data.process import update_features
 from diffold.config_v6 import model_config
 from diffold.diffusion.transition_v6 import Diffuser
 from diffold.inference import utils, job as J, metrics as M
-from diffold.inference.utils import get_pocket_center # <--- IMPORT NEW FUNCTION
 
 logging.set_verbosity("info")
 
@@ -53,13 +52,13 @@ def config_and_model(args):
     return config, model
 
 
-# def remove_center(*args, mask, eps=1e-12):
-#     inputs = [Frame.from_tensor_4x4(f) for f in args]
-#     ref_trans = inputs[0].get_trans()
-#     ref_center = (ref_trans * mask[..., None]).sum(dim=-2)
-#     ref_center /= (mask[..., None].sum(dim=-2) + eps)
-#     outputs = [Frame(f.get_rots(), f.get_trans() - ref_center[..., None, :]) for f in inputs]
-#     return (o.to_tensor_4x4() for o in outputs)
+def remove_center(*args, mask, eps=1e-12):
+    inputs = [Frame.from_tensor_4x4(f) for f in args]
+    ref_trans = inputs[0].get_trans()
+    ref_center = (ref_trans * mask[..., None]).sum(dim=-2)
+    ref_center /= (mask[..., None].sum(dim=-2) + eps)
+    outputs = [Frame(f.get_rots(), f.get_trans() - ref_center[..., None, :]) for f in inputs]
+    return (o.to_tensor_4x4() for o in outputs)
 
 
 def add_virtual_CB(s: Structure):
@@ -168,25 +167,6 @@ def main(args):
                 silent=True,
                 ignore_missing_residues=job.ignore_missing_residues,
             )
-            # --- STEP 1: POCKET CENTERING (BEFORE THE LOOP) ---
-            pocket_center = get_pocket_center(batch)
-            if pocket_center is not None:
-                pocket_center = pocket_center.to(args.device)
-                # Apply the translation to the initial ground truth and noised frames
-                # For ground truth frames
-                frames_tensor = batch['frames'].to(args.device)
-                frame_gt = Frame.from_tensor_4x4(frames_tensor)
-                trans_gt = frame_gt.get_trans() - pocket_center[None, :]
-                new_frame_gt = Frame(frame_gt.get_rots(), trans_gt)
-                batch['frames'] = new_frame_gt.to_tensor_4x4()
-
-                # For diffused frames
-                diffused_frames_tensor = batch['diffused_frames'].to(args.device)
-                frame_diffused = Frame.from_tensor_4x4(diffused_frames_tensor)
-                trans_diffused = frame_diffused.get_trans() - pocket_center[None, :]
-                new_frame_diffused = Frame(frame_diffused.get_rots(), trans_diffused)
-                batch['diffused_frames'] = new_frame_diffused.to_tensor_4x4()
-
             batch = model.convert_input_device(batch, args.device)
             rep_name = f"{job.id}_rep{replica:03d}_seed{seed:05d}"
 
@@ -215,6 +195,7 @@ def main(args):
                 if job.num_steps >= 10
                 else range(job.num_steps)
             )
+            s_0, f_0 = batch["aalogits"], batch["frames"]
 
             for i in iter_t:
                 # denoise step
@@ -225,7 +206,7 @@ def main(args):
                     out = model(batch)
                 sh_0, fh_0 = out["aalogits"], out["frames"][-1]     # use last frame
                 b_factor = out["plddt"][..., None].tile(37)
-                # fh_0, f_t = remove_center(fh_0, f_t, mask=batch["frame_mask"])
+                fh_0, f_t = remove_center(fh_0, f_t, mask=batch["frame_mask"])
 
                 # saving intermediate results
                 if job.save_trajectory:
@@ -273,14 +254,6 @@ def main(args):
                 batch["diffusion_t"] = s
                 batch = update_features(batch, config.data)
 
-            # --- STEP 3: TRANSLATE BACK (AFTER THE LOOP) ---
-            if pocket_center is not None:
-                logging.info("Translating final structure back to original coordinates.")
-                frame_final = Frame.from_tensor_4x4(fh_0)
-                trans_final = frame_final.get_trans() + pocket_center[None, :]
-                new_frame_final = Frame(frame_final.get_rots(), trans_final)
-                fh_0 = new_frame_final.to_tensor_4x4()
-
             # save final results
             utils.save_pdb(
                 os.path.join(output_dir, f"out_{rep_name}.pdb"),
@@ -327,10 +300,10 @@ def main(args):
                     peptide_entropy = entropy[:peptide_len]
                     assert len(peptide_entropy) == peptide_len, "Entropy extraction failed after adjustment."
 
-                # print(f"Full entropy length: {len(entropy)}")
-                # print(f"Peptide mask sum: {peptide_mask.sum()}")
-                # print(f"Peptide entropy length: {len(peptide_entropy)}")
-                # print(f"Peptide PDB sequence length: {peptide_len}")
+                print(f"Full entropy length: {len(entropy)}")
+                print(f"Peptide mask sum: {peptide_mask.sum()}")
+                print(f"Peptide entropy length: {len(peptide_entropy)}")
+                print(f"Peptide PDB sequence length: {peptide_len}")
                 print(f"Peptide PDB sequence: {peptide_structure.seq}")
                 
                 ss_frag_lib = read_ssdata(args.ss_frag_lib)
