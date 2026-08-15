@@ -272,6 +272,7 @@ def build_sample_from_residx(
         if old_chainid is None:
             res = deepcopy(PSEUDO_RESIDUE)
             assert symbol is None, "must not provide symbols for residues to generate."
+            res["ligmask"] = np.array(0. if is_ligand else 1.)
             res["seq_gen_mask"] = np.array(1.)
             res["frame_gen_mask"] = np.array(1.)
         else:

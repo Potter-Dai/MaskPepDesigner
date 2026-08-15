@@ -592,6 +592,10 @@ def get_spatial_crop_index(
         # Penalize residues not in ca_mask
         min_distances += (1 - ca_mask) * inf
 
+        # True de novo peptide residues have no initial CA coordinates but must
+        # remain in the crop. Fill the remaining crop with nearby receptor.
+        min_distances[peptide_indices] = -inf
+
         # Add slight random noise to break ties
         with numpy_seed(seed, 0, key="spatial_crop"):
             noise = np.random.randn(min_distances.shape[0]) * 1e-4
