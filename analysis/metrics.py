@@ -11,7 +11,7 @@ from Bio.PDB import PDBParser
 from Bio.Align import PairwiseAligner
 
 from unifold.data import residue_constants
-from diffold.data import utils as du
+from MPDesigner.data import utils as du
 from analysis.postprocess import Postprocess
 from analysis.postprocess_utils import summarize_statistics
 from unifold.data.residue_constants import restypes

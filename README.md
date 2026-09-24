@@ -1,6 +1,6 @@
 # MaskPepDesigner
 
-MaskPepDesigner is a deep learning framework dedicated to the **de novo design of peptide binders**. Built upon the foundations of Uni-Fold/AlphaFold, it shifts the focus from general protein structure prediction to the specific challenge of designing novel, high-affinity peptide binders for given target protein structures.
+MaskPepDesigner is a deep learning framework dedicated to the **de novo design of peptide binders**. Developed from Diffold, which builds on DP Technology Uni-Fold and AlphaFold, it shifts the focus from general protein structure prediction to the specific challenge of designing novel, high-affinity peptide binders for given target protein structures.
 
 ## Overview
 
@@ -13,10 +13,13 @@ Key features include:
 
 ## Repository Structure
 
-- `diffold/` & `unifold/`: Core model implementations.
+- `MPDesigner/`: MaskPepDesigner model, training task, data processing and inference utilities.
+- `diffold/`: Compatibility imports for existing code and checkpoints.
+- `unifold/`: Retained upstream Uni-Fold components and attribution.
 - `SSbuilder/`: Sequence and Structure builder utilities for dataset preparation and feature extraction.
-- `analysis/`: Scripts for evaluating predictions and calculating metrics like ipSAE, pLDDT, and complex free energy.
-- `run_diffold.py` / `run_diffold_ss.py`: Entry points for training and running inference.
+- `analysis/`: Scripts for evaluating predictions and calculating metrics like ipSAE, pLDDT, and Rosetta energy scores.
+- `run_MPDesigner.py` / `run_MPDesigner_ss.py`: Inference entry points.
+- `train_MPDesigner.sh` / `finetune_MPDesigner*.sh`: Training entry points.
 
 ## Quick Start
 
@@ -24,26 +27,59 @@ Key features include:
 
 To run the design process using pre-trained model weights:
 ```bash
-python run_diffold.py \
-    --config_path /path/to/your/config.yml \
-    --checkpoint_path /path/to/checkpoint.pt \
-    --output_dir /path/to/output
+python run_MPDesigner.py \
+    --tasks /path/to/tasks.json \
+    --input_pdbs /path/to/reference_pdbs \
+    --checkpoint /path/to/checkpoint.pt \
+    --outputs /path/to/output \
+    --model MPDesigner_v65
 ```
+
+`MPDesigner_v65` is an example configuration name, not a declaration of which
+checkpoint you have. Use the exact version and modifiers used to train your
+checkpoint. Existing configuration strings (including `denovo` variants) remain
+valid. The name change does not convert one architecture/version into another.
+Peptide inference currently expects receptor first, peptide second, with explicit
+hotspots and the peptide `@` marker; see [input syntax](MPDESIGNER_README.md).
 
 ### Training
 
-To finetune or train the model on your own peptide-protein complex data:
+The general training script takes five positional arguments:
+
 ```bash
-bash train_diffold.sh \
-    /path/to/training/data/ \
-    /path/to/output/directory/ \
-    model_name
+bash train_MPDesigner.sh \
+    /path/to/unifold_db /path/to/distillation_db /path/to/esm_db \
+    /path/to/output MPDesigner_v65
 ```
-(See `train_diffold.sh` or `finetune_diffold.sh` for exact arguments and distributed training setup).
+
+General finetuning takes the same first four arguments, then checkpoint and model
+configuration. The peptide-specific launcher uses four arguments:
+
+```bash
+bash finetune_MPDesigner_peptide.sh \
+    /path/to/peptide_db /path/to/output /path/to/checkpoint.pt denovo
+```
+
+Run launchers from the repository root in an environment with the project's
+PyTorch, Uni-Core and Uni-Fold dependencies. `pip install -e .` installs this
+repository as `MaskPepDesigner`; it does not provision the complete GPU environment.
+
+### Naming and compatibility
+
+The Python API is `from MPDesigner.nn.mpdesigner import MPDesigner`. Uni-Core uses
+`--user-dir MPDesigner --task MPDesigner --loss MPDesigner --arch MPDesigner_v6`.
+Always supply `--model-name` explicitly. Old `run_diffold*.py`, training shell
+scripts, `diffold.*` imports and `diffold`/`diffold_v6` registrations remain as
+compatibility entry points. Module parameter names and layer dimensions are
+unchanged by this migration; real checkpoint/GPU validation is still required.
+Do not rename `unifold` imports or remove upstream copyright/license notices.
+
+See [migration and review](docs/code_review_2026-09-07.md) for fixed defects,
+remaining scientific/reproducibility risks and verification limits.
 
 ## Acknowledgments
 
-This repository builds upon the architecture and framework established by [Uni-Fold](https://github.com/dptech-corp/Uni-Fold) and [AlphaFold](https://github.com/deepmind/alphafold/). We thank the authors for making their codebase open-source.
+MaskPepDesigner was developed from Diffold, which in turn is based on DP Technology Uni-Fold. This repository retains components from [Uni-Fold](https://github.com/dptech-corp/Uni-Fold) and [AlphaFold](https://github.com/deepmind/alphafold/). We thank the authors for making their codebase open-source.
 
 ## License
 

@@ -1,9 +1,9 @@
-from diffold.nn.diffold import Diffold
-from diffold.data import data_ops as ops
-from diffold.data.utils import recur_print
-from diffold.diffusion.transition import uniform_random_rotations
+from MPDesigner.nn.diffold import Diffold
+from MPDesigner.data import data_ops as ops
+from MPDesigner.data.utils import recur_print
+from MPDesigner.diffusion.transition import uniform_random_rotations
 
-from diffold.test.test_nn import display
+from MPDesigner.test.test_nn import display
 
 import torch
 import logging
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 from unifold.modules.frame import Frame, Rotation, Quaternion
 
-from diffold.config import model_config
+from MPDesigner.config import model_config
 
 config = model_config("tiny")
 model = Diffold(config.model)
@@ -38,7 +38,7 @@ def make_batch():
     seq_mask = torch.randint(
         0, 2, size=(bsz, nres), dtype=torch.float
     )
-    
+
     f = Frame(
         Rotation(uniform_random_rotations((bsz, nres, 3, 3))),
         torch.randn((bsz, nres, 3))
@@ -63,5 +63,3 @@ def test_diffold():
     recur_print(outs)
 
 test_diffold()
-
-

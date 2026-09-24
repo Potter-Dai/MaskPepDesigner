@@ -7,12 +7,12 @@ logger = logging.getLogger(__name__)
 from unifold.modules.attentions import gen_tri_attn_mask, gen_attn_mask
 from unifold.modules.frame import Frame, Rotation, Quaternion
 
-from diffold.config import model_config
-from diffold.data import data_ops as ops
-from diffold.diffusion.transition import uniform_random_rotations
-from diffold.nn.modules import (
+from MPDesigner.config import model_config
+from MPDesigner.data import data_ops as ops
+from MPDesigner.diffusion.transition import uniform_random_rotations
+from MPDesigner.nn.modules import (
     InputEmbedder,
-    DiffoldEvoformerStack,
+    MPDesignerEvoformerStack,
     LiteStructureModule,
     SidechainModule,
     frames_to_tensors,
@@ -92,7 +92,7 @@ def test_input_emb():
     return True
 
 def test_evoformer():
-    evoformer = DiffoldEvoformerStack(
+    evoformer = MPDesignerEvoformerStack(
         **config.model.zormer.evoformer,
         **base_args,
     )

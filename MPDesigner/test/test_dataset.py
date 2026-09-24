@@ -1,5 +1,5 @@
 # test dataset
-# dataset = DiffoldDataset(
+# dataset = MPDesignerDataset(
 #     config=config,
 #     mode="train",
 #     unifold_db_path="/mnt/data/projects/unifold/data_0916/traineval",

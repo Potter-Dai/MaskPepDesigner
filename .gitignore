@@ -2,3 +2,8 @@ plot_loss.py
 plot_loss2.py
 SSbuilder/SSBLIB/
 .DS_Store
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/

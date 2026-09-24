@@ -1,3 +1,2 @@
-""" Diffold: Uni-Fold x Diffusion."""
-
-from . import task, model, loss
+"""Legacy package; use MPDesigner in new code."""
+from MPDesigner import *

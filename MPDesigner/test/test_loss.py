@@ -1,23 +1,23 @@
 import torch
 
-from diffold.data.utils import recur_print
-from diffold.losses.auxillary import (
+from MPDesigner.data.utils import recur_print
+from MPDesigner.losses.auxillary import (
     plddt_loss,
     supervised_chi_loss,
     distogram_loss,
     pae_loss,
     sequence_denoise_loss_v3,
 )
-from diffold.losses.structure import (
+from MPDesigner.losses.structure import (
     compute_frame_loss,
     compute_ca_metrics,
     backbone_clash_loss,
 )
 
 from unifold.modules.frame import Frame, Rotation
-from diffold.diffusion.transition import uniform_random_rotations
+from MPDesigner.diffusion.transition import uniform_random_rotations
 
-from diffold.data.data_ops import compute_distogram
+from MPDesigner.data.data_ops import compute_distogram
 
 from unifold.losses.auxillary import (
     supervised_chi_loss as uf_chi_loss,
@@ -29,7 +29,7 @@ from unifold.losses.auxillary import (
     masked_mean
 )
 
-from diffold.config import model_config
+from MPDesigner.config import model_config
 
 config = model_config("tiny")
 
@@ -57,7 +57,7 @@ def test_distogram_loss():
         loss_dict=loss_dict1
     )
     loss2 = uf_distogram_loss(
-        logits, 
+        logits,
         ca,
         frame_mask,
         min_bin,

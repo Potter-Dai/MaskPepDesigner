@@ -17,16 +17,14 @@ from setuptools import find_packages
 from setuptools import setup
 
 setup(
-    name="unifold",
-    version="2.3.0.4", # diffold v4
-    description="An open-source platform for developing protein folding models beyond AlphaFold.",
-    author="DP Technology",
-    author_email="unifold@dp.tech",
+    name="MaskPepDesigner",
+    version="2.3.0.4",
+    description="Peptide binder design developed from Diffold and Uni-Fold.",
     license="Apache License, Version 2.0",
-    url="https://github.com/dptech-corp/Uni-Fold",
     packages=find_packages(
-        exclude=["scripts", "tests", "example_data", "docker", "benchmark", "img", "evaluation", "notebooks"]
+        exclude=["scripts", "tests", "tests.*", "MPDesigner.test", "MPDesigner.test.*", "example_data", "docker", "benchmark", "img", "evaluation", "notebooks"]
     ),
+    package_data={"MPDesigner.data": ["plddt_spline.pkl.gz"]},
     install_requires=[
         "absl-py",
         "biopython",
