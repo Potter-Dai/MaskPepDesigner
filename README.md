@@ -15,7 +15,7 @@ Key features include:
 
 - `diffold/` & `unifold/`: Core model implementations.
 - `SSbuilder/`: Sequence and Structure builder utilities for dataset preparation and feature extraction.
-- `analysis/`: Scripts for evaluating predictions and calculating metrics like ipSAE, pLDDT, and complex free energy.
+- `analysis/`: Scripts for evaluating predictions and calculating metrics. See [analysis/README.md](analysis/README.md) for the independent linear and head-to-tail peptide postprocessing entry point, its dependencies, and scoring caveats.
 - `run_diffold.py` / `run_diffold_ss.py`: Entry points for training and running inference.
 
 ## Quick Start

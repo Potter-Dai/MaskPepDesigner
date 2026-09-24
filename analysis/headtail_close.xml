@@ -1,0 +1,40 @@
+<ROSETTASCRIPTS>
+  <SCOREFXNS>
+    <ScoreFunction name="score" weights="ref2015" />
+    <ScoreFunction name="closure_score" weights="ref2015">
+      <Reweight scoretype="atom_pair_constraint" weight="1.0" />
+      <Reweight scoretype="angle_constraint" weight="1.0" />
+      <Reweight scoretype="dihedral_constraint" weight="1.0" />
+    </ScoreFunction>
+  </SCOREFXNS>
+  <RESIDUE_SELECTORS>
+    <Chain name="binder" chains="A" />
+    <Not name="receptor" selector="binder" />
+  </RESIDUE_SELECTORS>
+  <TASKOPERATIONS>
+    <RestrictToRepacking name="same_sequence" />
+    <OperateOnResidueSubset name="freeze_receptor" selector="receptor">
+      <PreventRepackingRLT />
+    </OperateOnResidueSubset>
+  </TASKOPERATIONS>
+  <MOVE_MAP_FACTORIES>
+    <MoveMapFactory name="binder_only" bb="false" chi="false" jumps="false">
+      <Backbone residue_selector="binder" />
+      <Chi residue_selector="binder" />
+    </MoveMapFactory>
+  </MOVE_MAP_FACTORIES>
+  <MOVERS>
+    <PeptideCyclizeMover name="make_headtail_bond" residue_selector="binder" />
+    <FastRelax name="close_backbone" scorefxn="closure_score" repeats="1"
+               task_operations="same_sequence,freeze_receptor"
+               movemap_factory="binder_only" ramp_down_constraints="false" />
+    <PackRotamersMover name="repack_binder" scorefxn="score"
+                       task_operations="same_sequence,freeze_receptor" />
+  </MOVERS>
+  <PROTOCOLS>
+    <Add mover="make_headtail_bond" />
+    <Add mover="close_backbone" />
+    <Add mover="repack_binder" />
+  </PROTOCOLS>
+  <OUTPUT scorefxn="score" />
+</ROSETTASCRIPTS>

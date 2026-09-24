@@ -1,0 +1,32 @@
+<ROSETTASCRIPTS>
+  <SCOREFXNS>
+    <ScoreFunction name="cart_score" weights="ref2015">
+      <Reweight scoretype="cart_bonded" weight="0.5" />
+      <Reweight scoretype="pro_close" weight="0.0" />
+      <Reweight scoretype="atom_pair_constraint" weight="1.0" />
+      <Reweight scoretype="angle_constraint" weight="1.0" />
+      <Reweight scoretype="dihedral_constraint" weight="1.0" />
+    </ScoreFunction>
+  </SCOREFXNS>
+  <RESIDUE_SELECTORS>
+    <Chain name="binder" chains="A" />
+  </RESIDUE_SELECTORS>
+  <TASKOPERATIONS>
+    <RestrictToRepacking name="same_sequence" />
+  </TASKOPERATIONS>
+  <MOVE_MAP_FACTORIES>
+    <MoveMapFactory name="binder_bb_all_chi" bb="false" chi="true" jumps="false">
+      <Backbone residue_selector="binder" />
+    </MoveMapFactory>
+  </MOVE_MAP_FACTORIES>
+  <MOVERS>
+    <FastRelax name="cart_relax" scorefxn="cart_score" repeats="1"
+               cartesian="true" bondangle="true" bondlength="true"
+               task_operations="same_sequence" movemap_factory="binder_bb_all_chi"
+               ramp_down_constraints="false" />
+  </MOVERS>
+  <PROTOCOLS>
+    <Add mover="cart_relax" />
+  </PROTOCOLS>
+  <OUTPUT scorefxn="cart_score" />
+</ROSETTASCRIPTS>

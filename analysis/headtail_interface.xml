@@ -1,0 +1,17 @@
+<!-- Case-specific scoring only: input must already contain a real C(last)-N(first) bond.
+     Adapted from DiffPepBuilder analysis/interface_analyze.xml without its
+     AtomTree, MinMover, FastRelax, or linear-peptide ddg_norepack filter. -->
+<ROSETTASCRIPTS>
+  <SCOREFXNS>
+    <ScoreFunction name="score" weights="ref2015" />
+  </SCOREFXNS>
+  <MOVERS>
+    <InterfaceAnalyzerMover name="cyclic_interface" scorefxn="score"
+      ligandchain="A" pack_input="false" pack_separated="true"
+      packstat="true" interface_sc="true" />
+  </MOVERS>
+  <PROTOCOLS>
+    <Add mover="cyclic_interface" />
+  </PROTOCOLS>
+  <OUTPUT scorefxn="score" />
+</ROSETTASCRIPTS>
