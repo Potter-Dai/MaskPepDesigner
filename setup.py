@@ -19,7 +19,7 @@ from setuptools import setup
 setup(
     name="MaskPepDesigner",
     version="2.3.0.4",
-    description="Peptide binder design developed from Diffold and Uni-Fold.",
+    description="Peptide binder design developed upon Uni-Fold and AlphaFold2.",
     license="Apache License, Version 2.0",
     packages=find_packages(
         exclude=["scripts", "tests", "tests.*", "MPDesigner.test", "MPDesigner.test.*", "example_data", "docker", "benchmark", "img", "evaluation", "notebooks"]

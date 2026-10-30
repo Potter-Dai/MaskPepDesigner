@@ -127,7 +127,7 @@ class AngleDistribution(nn.Module):
         )
 
 
-def plot_pdf(path="./img/diffold/omega_pdf.png", fmt="png", **kwargs):
+def plot_pdf(path="./img/omega_pdf.png", fmt="png", **kwargs):
     import matplotlib as mpl
     import matplotlib.pyplot as plt
     distrib = AngleDistribution(**kwargs)

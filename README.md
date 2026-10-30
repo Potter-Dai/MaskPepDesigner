@@ -7,7 +7,7 @@
 
 This repository provides the official implementation of **MaskPepDesigner (MPD)**, an $SE(3)$-equivariant sequence–structure co-diffusion foundation model adapted from AlphaFold2-Multimer for the **de novo design of disulfide-constrained masking peptides, linear peptide binders, and head-to-tail macrocycles**, as well as **pocket-guided peptide docking (folding)** and **peptide inverse folding**.
 
-> **MaskPepDesigner** is developed from Diffold and builds upon [DP Technology Uni-Fold](https://github.com/dptech-corp/Uni-Fold) and [AlphaFold2](https://github.com/deepmind/alphafold), with postprocessing modules adapted from [DiffPepBuilder](https://github.com/YuzheWangPKU/DiffPepBuilder). We thank the original authors for open-sourcing their work.
+> **MaskPepDesigner** is developed upon [DP Technology Uni-Fold](https://github.com/dptech-corp/Uni-Fold) and [AlphaFold2](https://github.com/deepmind/alphafold), with postprocessing modules adapted from [DiffPepBuilder](https://github.com/YuzheWangPKU/DiffPepBuilder). We thank the original authors for open-sourcing their work.
 
 ![MaskPepDesigner Overview](img/mpdesigner_overview.png)
 
@@ -212,8 +212,8 @@ MaskPepDesigner/
 │   └── inference/              # Contig parser, job manager, pocket centering & PDB writer
 ├── SSbuilder/                  # Explicit geometric disulfide builder & SSBLIB rotamer fragment library
 ├── analysis/                   # Linear, disulfide, and head-to-tail cyclic postprocessing & Rosetta XMLs
-├── diffold/                    # Backward-compatibility import shims for legacy scripts/checkpoints
 ├── unifold/                    # Retained upstream Uni-Fold modules & stereo-chemical constants
+├── examples/                   # Example input PDBs and task configuration files
 ├── tests/                      # Unit and regression test suite (run via `python -m unittest discover -s tests`)
 ├── run_MPDesigner.py           # Main inference entry point (co-design, folding/docking, inverse folding)
 ├── run_MPDesigner_ss.py        # Inference entry point with integrated SSbuilder disulfide cyclization
@@ -225,7 +225,6 @@ MaskPepDesigner/
 ### Additional Documentation
 - [Input & Contig Reference (`MPDESIGNER_README.md`)](MPDESIGNER_README.md)
 - [Linear & Head-to-Tail Cyclic Postprocessing Guide (`analysis/README.md`)](analysis/README.md)
-- [Package Migration & Code Audit Notes (`docs/code_review_2026-09-07.md`)](docs/code_review_2026-09-07.md)
 
 ---
 

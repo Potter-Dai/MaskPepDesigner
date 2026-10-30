@@ -111,8 +111,3 @@ class MPDesignerTask(UnicoreTask):
 
     def disable_shuffling(self) -> bool:
         return True
-
-
-@register_task("diffold")
-class DiffoldTask(MPDesignerTask):
-    """Compatibility registration for old training commands/checkpoints."""

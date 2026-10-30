@@ -66,8 +66,3 @@ class MPDesignerLoss(UnicoreLoss):
         to True will improves distributed training speed.
         """
         return True
-
-
-@register_loss("diffold")
-class DiffoldLoss(MPDesignerLoss):
-    """Compatibility registration for old training commands/checkpoints."""

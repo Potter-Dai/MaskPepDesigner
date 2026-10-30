@@ -370,5 +370,4 @@ class SidechainModule(StructureModule):
         }
 
 
-# Compatibility names for existing downstream code.
-DiffoldEvoformerStack = MPDesignerEvoformerStack
+# Core modules for MPDesigner

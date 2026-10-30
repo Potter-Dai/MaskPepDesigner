@@ -301,6 +301,4 @@ class MPDesignerEvoformerStack(nn.Module):
         return s, z
 
 
-# Compatibility names for existing downstream code.
-DiffoldEvoformerStack = MPDesignerEvoformerStack
-DiffoldEvoformerBlock = MPDesignerEvoformerBlock
+# Evoformer modules for MPDesigner

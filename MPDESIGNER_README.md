@@ -1,8 +1,6 @@
 # MPDesigner input and inference reference
 
-Adapted from the original Diffold documentation. Historical general-protein
-capabilities below are not all validated for the current peptide-specific crop
-and masking pipeline; see [the code review](docs/code_review_2026-09-07.md).
+Reference documentation for preparing task configurations and `contig` strings for `MaskPepDesigner`.
 
 ## 1. Historical task types:
 
@@ -102,7 +100,7 @@ The valid `symbol`s contain "\$", "\*" and "\%".
 
 If a segment is to be designed (i.e. with on referenced structures or sequences at all), then it should contain no `chain_id` nor `symbol`. A length from `start_id` and `end_id` is sampled for this segment.
 
-See the example usage of `task`s and `contig`s at [task.json](/example_diffold/task.json).
+See the example usage of `task`s and `contig`s at [example_tasks.json](examples/example_tasks.json).
 
 ### 3.3. Peptide and hotspot markers
 

@@ -1,3 +1,3 @@
-"""MaskPepDesigner, developed from Diffold and DP Technology Uni-Fold."""
+"""MaskPepDesigner, developed upon DP Technology Uni-Fold and AlphaFold2."""
 
 from . import task, model, loss

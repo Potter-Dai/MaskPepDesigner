@@ -15,8 +15,8 @@ conda activate ufconf
 work_dir="/flashfs1/work/btdai/projects/ufcpdiff_cutpock_fixtask/"
 cd $work_dir
 
-sh finetune_diffold_noema.sh /flashfs1/scratch.global/btdai/traineval_dbt_multimer4CP \
-/flashfs1/scratch.global/btdai/diffold_train/CPset_v67_ftv66_denovo_crop10A_fixtask_bz8 \
-../ckps/v66_ftv65/checkpoint_1_79000.pt denovo > finetune_v66_denovo_10A_fixtask_bz8.log
+sh finetune_MPDesigner_peptide.sh /path/to/cpset_lmdb \
+/path/to/save_dir \
+/path/to/pretrained_checkpoint.pt denovo > finetune_mpdesigner.log
 
 

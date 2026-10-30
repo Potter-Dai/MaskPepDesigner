@@ -201,7 +201,3 @@ class MPDesignerDataset(UnicoreDataset):
 
     def __str__(self) -> str:
         return str(self.dbs)
-
-
-# Compatibility names for existing downstream code.
-DiffoldDataset = MPDesignerDataset

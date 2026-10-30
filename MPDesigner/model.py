@@ -52,13 +52,3 @@ def mpdesigner_architecture(args):
         raise ValueError("Specify --model-name with the exact checkpoint configuration "
                          "(for example MPDesigner_v65); the architecture name alone "
                          "does not identify a trained configuration.")
-
-
-@register_model("diffold")
-class DiffoldModel(MPDesignerModel):
-    """Compatibility registration for old training commands/checkpoints."""
-
-
-@register_model_architecture("diffold", "diffold_v6")
-def arch_v4(args):
-    mpdesigner_architecture(args)
