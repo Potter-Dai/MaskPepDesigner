@@ -5,7 +5,7 @@
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2.0%2Bcu118-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Singularity](https://img.shields.io/badge/Container-Singularity%20%2F%20Apptainer-1D4ED8.svg)](MPDESIGNER_README.md)
 
-This repository provides the official implementation of **MaskPepDesigner (MPD)**, an $SE(3)$-equivariant sequence–structure co-diffusion foundation model adapted from AlphaFold2-Multimer for the **de novo design of disulfide-constrained masking peptides, linear peptide binders, and head-to-tail macrocycles**, as well as **pocket-guided peptide docking (folding)** and **peptide inverse folding**.
+This repository provides the official implementation of **MaskPepDesigner (MPD)**, an SE(3)-equivariant sequence–structure co-diffusion foundation model adapted from AlphaFold2-Multimer for the **de novo design of disulfide-constrained masking peptides, linear peptide binders, and head-to-tail macrocycles**, as well as **pocket-guided peptide docking (folding)** and **peptide inverse folding**.
 
 > **MaskPepDesigner** is developed upon [DP Technology Uni-Fold](https://github.com/dptech-corp/Uni-Fold) and [AlphaFold2](https://github.com/deepmind/alphafold), with postprocessing modules adapted from [DiffPepBuilder](https://github.com/YuzheWangPKU/DiffPepBuilder). We thank the original authors for open-sourcing their work.
 
@@ -23,17 +23,17 @@ This repository provides the official implementation of **MaskPepDesigner (MPD)*
 
 ## Capabilities
 
-**MaskPepDesigner** learns joint $SE(3)$ backbone frame ($\mathbb{R}^3$ translation + $\text{IGSO}(3)$ rotation) and amino acid sequence ($\mathbb{R}^{21}$ Gaussian logit) distributions conditioned on target receptor pockets. By simply adjusting the **contig prompt**, a single trained model supports a unified spectrum of peptide engineering tasks:
+**MaskPepDesigner** learns joint SE(3) backbone frame (ℝ³ translation + IGSO(3) rotation) and amino acid sequence (ℝ²¹ Gaussian logit) distributions conditioned on target receptor pockets. By simply adjusting the **contig prompt**, a single trained model supports a unified spectrum of peptide engineering tasks:
 
 - **De Novo Peptide Co-Design (Sequence + Structure Generation)**:
-  - **Disulfide-Constrained Cyclic Masking Peptides**: Generates loop- and $\beta$-hairpin-enriched cyclic-like peptides (`CPset`-trained) and couples with **SSbuilder** to automatically install strain-free Cys–Cys disulfide bridges at high-entropy positions while preserving free N/C termini for probody linker fusion.
+  - **Disulfide-Constrained Cyclic Masking Peptides**: Generates loop- and β-hairpin-enriched cyclic-like peptides (`CPset`-trained) and couples with **SSbuilder** to automatically install strain-free Cys–Cys disulfide bridges at high-entropy positions while preserving free N/C termini for probody linker fusion.
   - **Linear & Head-to-Tail Macrocyclic Binders**: Supports both standard linear peptide generation and circular relative positional encoding (`cyclic` mode) for de novo head-to-tail macrocyclic binder design.
 - **Peptide Folding / Hotspot-Guided Binding Pose Prediction (Flexible Peptide Docking)**:
   - When a peptide's **amino acid sequence is known**—and potential binding site residues (hotspots) on the target receptor are known or predicted by pocket-detection tools—fixing the peptide sequence (`@*`) while diffusing its 3D coordinates predicts the **bound 3D conformation and binding pose** directly within the target pocket.
 - **Peptide Inverse Folding (Fixed-Backbone Sequence Design)**:
   - Given a fixed 3D protein–peptide complex backbone, masking only the peptide sequence (`@$`) designs optimal amino acid sequences tailored to the target receptor interface.
 - **End-to-End All-Atom Refinement & Thermodynamic Scoring**:
-  - Built-in parallel postprocessing pipeline combining **PDBFixer** sidechain reconstruction, restrained **OpenMM `Amber99sb`** energy minimization, and **PyRosetta `FastRelax` & `InterfaceAnalyzer`** ($\Delta\Delta G$ in R.E.U., `dG_cross/dSASAx100`, $\Delta\text{SASA}$, and full-ring macrocycle geometry auditing).
+  - Built-in parallel postprocessing pipeline combining **PDBFixer** sidechain reconstruction, restrained **OpenMM `Amber99sb`** energy minimization, and **PyRosetta `FastRelax` & `InterfaceAnalyzer`** (ΔΔG in R.E.U., `dG_cross/dSASAx100`, ΔSASA, and full-ring macrocycle geometry auditing).
 
 ---
 
@@ -81,7 +81,7 @@ Tasks are defined in a JSON file (`tasks.json`) mapping each task ID to a config
 
 > **Notes on Input PDBs**:
 > - You do **not** need to manually rename chains in your input PDB to `A` and `B`. Whatever receptor chain ID you specify before `:` (e.g., `H1-220{...}`) is automatically mapped to internal receptor chain `A`, and the peptide segment after `:` is mapped to internal peptide chain `B`.
-> - If `{HotspotResidues}` is omitted when a reference peptide is present in the input PDB, `MaskPepDesigner` automatically extracts receptor residues within $8.0\text{ \AA}$ of the reference peptide $C_\alpha$ atoms as hotspots.
+> - If `{HotspotResidues}` is omitted when a reference peptide is present in the input PDB, `MaskPepDesigner` automatically extracts receptor residues within 8.0 Å of the reference peptide Cα atoms as hotspots.
 
 #### Example `tasks.json` Covering Co-Design, Folding (Docking), and Inverse Folding
 
@@ -137,7 +137,7 @@ python run_MPDesigner.py \
 > **Output Coordinate Frame**: Generated complexes (`out_<task_id>_rep<NNN>_seed<SSSSS>.pdb`) are automatically translated back into the **exact world coordinate frame of the original input receptor PDB**, with fixed receptor sequences strictly preserved.
 
 #### 3.2 Disulfide-Constrained Cyclic Peptide Generation (`SSbuilder`)
-To automatically evaluate per-residue sequence Shannon entropy ($H_i > \tau$), screen $C_\alpha\text{–}C_\beta$ disulfide geometry, and graft full-atom Cys–Cys bridges from `SSBLIB`:
+To automatically evaluate per-residue sequence Shannon entropy (Hᵢ > τ), screen Cα–Cβ disulfide geometry, and graft full-atom Cys–Cys bridges from `SSBLIB`:
 ```bash
 python run_MPDesigner_ss.py \
     --tasks /path/to/tasks.json \
@@ -151,9 +151,10 @@ python run_MPDesigner_ss.py \
     --lig_chain B
 ```
 **Outputs**:
+
 - `out_<rep>.pdb`: Raw generated backbone complex (`Chain A` = cropped receptor, `Chain B` = peptide).
-- `out_<rep>_CB.pdb`: Peptide structure with idealized virtual $C_\beta$ atoms.
-- `out_<rep>_ss.pdb`: Disulfide-cyclized complex with grafted `CYS` sidechains ($C_\beta, S_\gamma$).
+- `out_<rep>_CB.pdb`: Peptide structure with idealized virtual Cβ atoms.
+- `out_<rep>_ss.pdb`: Disulfide-cyclized complex with grafted `CYS` sidechains (Cβ, Sγ).
 
 #### 3.3 All-Atom Refinement & Rosetta Interface Scoring (`DiffPepBuilder` Protocol)
 Directly pass the generation output directory to `run_postprocess.py`. It automatically resolves the full native receptor via `task_config.json`, normalizes chain IDs (`Peptide -> Chain A`, `Receptor -> Chain B`) to match `analysis/interface_analyze.xml`, reconstructs sidechains with `PDBFixer`, minimizes with `OpenMM Amber99sb`, and runs `PyRosetta FastRelax` & `InterfaceAnalyzer`:
@@ -169,8 +170,9 @@ python run_postprocess.py \
     --lig_chain B
 ```
 **Outputs**:
+
 - `*_final.pdb`: Full-atom refined receptor–peptide complex.
-- `postprocess_results.csv`: Summary table containing `ddg_norepack` (R.E.U.), `dG_cross/dSASAx100` (R.E.U./$\text{\AA}^2$), and `rmsd` ($\text{\AA}$).
+- `postprocess_results.csv`: Summary table containing `ddg_norepack` (R.E.U.), `dG_cross/dSASAx100` (R.E.U./Å²), and `rmsd` (Å).
 
 #### 3.4 Head-to-Tail Macrocyclic Peptide Postprocessing
 For head-to-tail macrocyclic designs (generated with `--model cyclic_denovo`), use the audited per-design adapter in `analysis/run_postprocess.py` (see [analysis/README.md](analysis/README.md) for full details):
@@ -231,6 +233,7 @@ MaskPepDesigner/
 ```
 
 ### Additional Documentation
+
 - [Input & Contig Reference (`MPDESIGNER_README.md`)](MPDESIGNER_README.md)
 - [Linear & Head-to-Tail Cyclic Postprocessing Guide (`analysis/README.md`)](analysis/README.md)
 
