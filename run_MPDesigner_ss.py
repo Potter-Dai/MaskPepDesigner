@@ -14,6 +14,7 @@ from MPDesigner.data.process import update_features
 from MPDesigner.config_v6 import model_config
 from MPDesigner.diffusion.transition_v6 import Diffuser
 from MPDesigner.inference import utils, job as J, metrics as M
+from MPDesigner.inference.utils import get_pocket_center
 
 logging.set_verbosity("info")
 
@@ -167,7 +168,24 @@ def main(args):
                 silent=True,
                 ignore_missing_residues=job.ignore_missing_residues,
             )
+            pocket_center = get_pocket_center(batch)
+            if pocket_center is not None:
+                pocket_center = pocket_center.to(args.device)
+                frames_tensor = batch['frames'].to(args.device)
+                frame_gt = Frame.from_tensor_4x4(frames_tensor)
+                trans_gt = frame_gt.get_trans() - pocket_center[None, :]
+                new_frame_gt = Frame(frame_gt.get_rots(), trans_gt)
+                batch['frames'] = new_frame_gt.to_tensor_4x4()
+
+                diffused_frames_tensor = batch['diffused_frames'].to(args.device)
+                frame_diffused = Frame.from_tensor_4x4(diffused_frames_tensor)
+                trans_diffused = frame_diffused.get_trans() - pocket_center[None, :]
+                new_frame_diffused = Frame(frame_diffused.get_rots(), trans_diffused)
+                batch['diffused_frames'] = new_frame_diffused.to_tensor_4x4()
+
             batch = model.convert_input_device(batch, args.device)
+            if pocket_center is not None:
+                batch = update_features(batch, config.data)
             rep_name = f"{job.id}_rep{replica:03d}_seed{seed:05d}"
 
             # create denoise time stamps
@@ -206,7 +224,6 @@ def main(args):
                     out = model(batch)
                 sh_0, fh_0 = out["aalogits"], out["frames"][-1]     # use last frame
                 b_factor = out["plddt"][..., None].tile(37)
-                fh_0, f_t = remove_center(fh_0, f_t, mask=batch["frame_mask"])
 
                 # saving intermediate results
                 if job.save_trajectory:
@@ -254,6 +271,23 @@ def main(args):
                 batch["diffusion_t"] = s
                 batch = update_features(batch, config.data)
 
+            sh_0 = torch.where(
+                batch["seq_gen_mask"][..., None] > 0,
+                sh_0,
+                batch["aalogits"].to(sh_0.dtype),
+            )
+            total_offset = torch.zeros(3, dtype=fh_0.dtype, device=fh_0.device)
+            if pocket_center is not None:
+                total_offset = total_offset + pocket_center.to(device=fh_0.device, dtype=fh_0.dtype)
+            if "initial_center" in batch and batch["initial_center"] is not None:
+                total_offset = total_offset + batch["initial_center"].to(device=fh_0.device, dtype=fh_0.dtype)
+            if torch.any(total_offset != 0):
+                logging.info("Translating final structure back to original coordinates.")
+                frame_final = Frame.from_tensor_4x4(fh_0)
+                trans_final = frame_final.get_trans() + total_offset[None, :]
+                new_frame_final = Frame(frame_final.get_rots(), trans_final)
+                fh_0 = new_frame_final.to_tensor_4x4()
+
             # save final results
             utils.save_pdb(
                 os.path.join(output_dir, f"out_{rep_name}.pdb"),
@@ -284,9 +318,10 @@ def main(args):
             # SSbond builder
             if args.ss_build:
                 pdb_path = os.path.join(output_dir, f"out_{rep_name}.pdb")
+                lig_chain = args.lig_chain
 
-                # load peptide Structure (chain 'B')
-                peptide_structure = Structure(pdb_path, chains='B')
+                # load peptide Structure
+                peptide_structure = Structure(pdb_path, chains=lig_chain)
 
                 # add virtual CB atoms
                 peptide_structure = add_virtual_CB(peptide_structure)
@@ -310,9 +345,9 @@ def main(args):
 
                 # check Cys terminal (ss_prob=peptide_entropy, bf_th=threshold)
                 if cys_terminal(peptide_structure, peptide_entropy, args.ss_entropy_threshold):
-                    new_peptide = build_ssbond(peptide_structure, ss_frag_lib, args.ss_max_bonds, 'B')
+                    new_peptide = build_ssbond(peptide_structure, ss_frag_lib, args.ss_max_bonds, lig_chain)
                     if new_peptide is not None:
-                        receptor_chains = ''.join([c for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' if c != 'B'])
+                        receptor_chains = ''.join([c for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' if c != lig_chain])
                         receptor_structure = Structure(pdb_path, chains=receptor_chains)
                         ss_pdb_path = pdb_path.replace(".pdb", "_ss.pdb")
                         merge_s(receptor_structure, new_peptide, ss_pdb_path)
@@ -366,8 +401,9 @@ The keyword arguments are illustrated in MPDESIGNER_README.md.
     )
 
     # SSbond building arguments
+    default_ss_lib = os.path.join(os.path.dirname(os.path.abspath(__file__)), "SSbuilder", "SSBLIB")
     parser.add_argument("--ss_build", action="store_true", help="If set, build SS bonds after generation.")
-    parser.add_argument("--ss_frag_lib", type=str, default="path/to/your/ss_frag_lib", help="Path to SS fragment library directory.")
+    parser.add_argument("--ss_frag_lib", type=str, default=default_ss_lib, help="Path to SS fragment library directory.")
     parser.add_argument("--ss_entropy_threshold", type=float, default=0.5, help="Entropy threshold for Cys terminal check.")
     parser.add_argument("--ss_max_bonds", type=int, default=1, help="Max number of SS bonds to build.")
     parser.add_argument("--lig_chain", type=str, default="B", help="Chain ID for the peptide binder (default: B for MPDesigner).")

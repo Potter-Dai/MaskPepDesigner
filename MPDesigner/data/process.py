@@ -148,7 +148,12 @@ def process_features(
         data_cfg, mode_cfg, task, diffusion_transition, **random_seeds,
     )
 
-    tensors = compose(operators)(tensors)
+    if seed is not None:
+        with torch.random.fork_rng(devices=[]):
+            torch.manual_seed(int(seed))
+            tensors = compose(operators)(tensors)
+    else:
+        tensors = compose(operators)(tensors)
 
     return tensors
 

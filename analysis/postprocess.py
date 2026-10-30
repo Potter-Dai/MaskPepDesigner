@@ -65,7 +65,8 @@ class Postprocess:
         out_dir: str,
         xml=None,
         amber_relax=True,
-        rosetta_relax=True
+        rosetta_relax=True,
+        do_reconstruct=False,
     ):
         self.pdb_file = pdb_file
         self.lig_chain_id = lig_chain_id
@@ -79,45 +80,123 @@ class Postprocess:
         self.data_id = os.path.splitext(os.path.basename(self.pdb_file))[0]
         self.recon_file = os.path.join(self.postprocess_dir, f"{self.data_id}_recon.pdb")
         self.fixed_file = os.path.join(self.postprocess_dir, f"{self.data_id}_fixed.pdb")
-        self.ori_file = self.find_ori_file()
+        self.do_reconstruct = do_reconstruct
+        if self.do_reconstruct:
+            self.ori_file = self.find_ori_file()
+        else:
+            try:
+                self.ori_file = self.find_ori_file()
+            except FileNotFoundError:
+                self.ori_file = self.pdb_file
         self.xml = xml
         self.amber_relax = amber_relax
         self.rosetta_relax = rosetta_relax
 
     def find_ori_file(self):
         """
-        Given self.data_id = e.g. "m_8F4G_2.03_fixed_nat_sample_28",
-        this will look for, in order:
-        m_8F4G_2.03_fixed_nat_sample_28.pdb
-        m_8F4G_2.03_fixed_nat_sample.pdb
-        m_8F4G_2.03_fixed_nat.pdb
-        m_8F4G_2.03_fixed.pdb   ←  finds this one
-        and stops as soon as it exists.
+        Locate the matching native receptor PDB in self.ori_dir:
+        1. Check task_config.json in the generated PDB's directory (or parent) for exact "pdb" key.
+        2. Iteratively strip trailing "_..." segments (and optional leading "out_").
+        3. If reduced to a PDB ID prefix (>=4 chars), match unique "<prefix>_*.pdb" in self.ori_dir.
         """
-        prefix = self.data_id
-        while True:
-            candidate = os.path.join(self.ori_dir, f"{prefix}.pdb")
-            if os.path.isfile(candidate):
-                return candidate
-            # if there's nothing left to strip, bail out
-            if "_" not in prefix:
-                break
-            # strip off the last “_…” segment and try again
-            prefix = prefix.rsplit("_", 1)[0]
+        if not self.ori_dir or not os.path.isdir(self.ori_dir):
+            raise FileNotFoundError(f"Original PDB directory {self.ori_dir!r} does not exist")
+
+        # 1. Exact lookup from task_config.json written by MPDesigner
+        gen_dir = os.path.dirname(os.path.abspath(self.pdb_file))
+        for cfg_dir in (gen_dir, os.path.dirname(gen_dir)):
+            task_cfg_path = os.path.join(cfg_dir, "task_config.json")
+            if os.path.isfile(task_cfg_path):
+                try:
+                    import json
+                    with open(task_cfg_path, "r") as f:
+                        tcfg = json.load(f)
+                    pdb_key = tcfg.get("pdb")
+                    if pdb_key:
+                        cand = os.path.join(self.ori_dir, f"{pdb_key}.pdb")
+                        if os.path.isfile(cand):
+                            return cand
+                except Exception:
+                    pass
+
+        # 2. Iterative prefix stripping
+        prefixes = [self.data_id]
+        if self.data_id.startswith("out_"):
+            prefixes.append(self.data_id[4:])
+        for base_prefix in prefixes:
+            prefix = base_prefix
+            while True:
+                candidate = os.path.join(self.ori_dir, f"{prefix}.pdb")
+                if os.path.isfile(candidate):
+                    return candidate
+                if "_" not in prefix:
+                    if len(prefix) >= 4:
+                        import glob
+                        matches = sorted(glob.glob(os.path.join(self.ori_dir, f"{prefix}_*.pdb")))
+                        if len(matches) == 1:
+                            return matches[0]
+                    break
+                prefix = prefix.rsplit("_", 1)[0]
 
         raise FileNotFoundError(f"No original PDB matching '{self.data_id}' found in {self.ori_dir!r}")
-    
-    def reconstruct(self):
-        s_pcl = P.get_structure("s_pcl", self.pdb_file)[0]
-        s_ori = P.get_structure("s_ori", self.ori_file)[0]
-        lig = [s_pcl[self.lig_chain_id]]
-        rec_ori = [i for i in s_ori.get_chains() if i.id != self.lig_chain_id]
-        ents = lig + rec_ori
+
+    def _resolve_lig_chain_id(self, model):
+        chain_ids = [c.id for c in model.get_chains()]
+        if not chain_ids:
+            raise ValueError(f"No chains found in {self.pdb_file}")
+        if self.lig_chain_id and self.lig_chain_id != "auto" and self.lig_chain_id in chain_ids:
+            return self.lig_chain_id
+        # Fallback to physical shortest-chain rule
+        shortest = min(model.get_chains(), key=lambda c: len(list(c.get_residues())))
+        return shortest.id
+
+    def _normalize_and_fix(self, lig_chain_obj, rec_chain_objs):
+        """
+        Normalize peptide chain to 'A' and receptor chain(s) to 'B', 'C', ...
+        so Rosetta interface_analyze.xml (<Chain name="CYC" chains="A"/>, ligandchain="A")
+        always scores the peptide as ligand and receptor as target.
+        """
+        lig_copy = lig_chain_obj.copy()
+        lig_copy.detach_parent()
+        lig_copy.id = "A"
+
+        avail_ids = iter("BCDEFGHIJKLMNOPQRSTUVWXYZ")
+        used_ids = {"A"}
+        rec_copies = []
+        for rc_obj in rec_chain_objs:
+            rc_copy = rc_obj.copy()
+            rc_copy.detach_parent()
+            if rc_copy.id in used_ids:
+                for cand in avail_ids:
+                    if cand not in used_ids:
+                        rc_copy.id = cand
+                        break
+            used_ids.add(rc_copy.id)
+            rec_copies.append(rc_copy)
+
+        ents = [lig_copy] + rec_copies
         new_ents = [check_GLY_CB(ent) for ent in ents]
         PI.set_structure_multiple(new_ents)
         PI.save(self.recon_file)
         fix_pdb(self.recon_file, self.fixed_file)
         self.pdb_file = self.fixed_file
+
+    def reconstruct(self):
+        s_pcl = P.get_structure("s_pcl", self.pdb_file)[0]
+        s_ori = P.get_structure("s_ori", self.ori_file)[0]
+        lig_id = self._resolve_lig_chain_id(s_pcl)
+        lig_chain = s_pcl[lig_id]
+        rec_ori = [c for c in s_ori.get_chains() if c.id != lig_id]
+        if not rec_ori:
+            rec_ori = [c for c in s_ori.get_chains()]
+        self._normalize_and_fix(lig_chain, rec_ori)
+
+    def prepare_without_reconstruct(self):
+        s_pcl = P.get_structure("s_pcl", self.pdb_file)[0]
+        lig_id = self._resolve_lig_chain_id(s_pcl)
+        lig_chain = s_pcl[lig_id]
+        rec_chains = [c for c in s_pcl.get_chains() if c.id != lig_id]
+        self._normalize_and_fix(lig_chain, rec_chains)
 
     def relax(self):
         ABRlx = AmberRelaxation(
@@ -160,9 +239,13 @@ class Postprocess:
 
     def __call__(self):
         try:
-            self.reconstruct()
+            if self.do_reconstruct:
+                self.reconstruct()
+            else:
+                self.prepare_without_reconstruct()
         except Exception as e:
-            raise RuntimeError(f"Error during reconstruction: {e}")
+            print(f"Skipping {self.pdb_file} due to error during preparation/reconstruction: {e}")
+            return
         if self.amber_relax:
             try:
                 self.relax()

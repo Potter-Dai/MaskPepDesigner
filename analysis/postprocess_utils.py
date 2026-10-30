@@ -177,34 +177,35 @@ class PCLIO(PDBIO):
         return "".join(string)
 
 
-def summarize_statistics(score_files: List[str], keys=["ddg_norepack", "rmsd"]):
+def summarize_statistics(score_files: List[str], keys=["ddg_norepack", "dG_cross/dSASAx100", "rmsd"]):
     """
-    Dataframe of scores by default, first column is affinity or ddG, second represents rmsd before and after postprocessing.
+    Dataframe of scores by default, first column is affinity or ddG, second represents interface energy density, third is rmsd before and after postprocessing.
     """
     scores = []
     indexes = []
     for score_file in score_files:
         json_file = score_file.replace(".sc", ".json")
-        jsf = open(json_file, "w")
         sf = open(score_file)
         lines = [i for i in sf.readlines()]
         sf.close()
         for idx, line in enumerate(lines):
             lines[idx] = f'"{idx}" : ' + line.strip() + ",\n"
         lines = [i for i in lines if ("nan" not in i) and (len(i) >= 100)]
+        if not lines:
+            continue
         lines[0] = "{" + lines[0]
         lines[-1] = lines[-1].strip()[:-1] + "}\n"
-        jsf.writelines(lines)
-        jsf.close()
+        with open(json_file, "w") as jsf:
+            jsf.writelines(lines)
         with open(json_file) as js:
             _scores = json.load(js)
         for i in _scores:
             try:
-                scores.append([_scores[i][j] for j in keys])
+                scores.append([_scores[i].get(j, np.nan) for j in keys])
                 indexes.append(
                     os.path.join(os.path.dirname(score_file), _scores[i]["decoy"])
                 )
-            except:
+            except Exception:
                 continue
     data = {"keys": keys, "scores": scores, "paths": indexes}
     return pd.DataFrame(

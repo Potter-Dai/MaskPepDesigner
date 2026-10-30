@@ -1,15 +1,12 @@
 """
 Script for postprocessing procedures.
 """
-import pyrootutils
+import os
+import sys
 
-# See: https://github.com/ashleve/pyrootutils
-root = pyrootutils.setup_root(
-    search_from=__file__,
-    indicator=[".git"],
-    pythonpath=True,
-    dotenv=True
-)
+root = os.path.dirname(os.path.abspath(__file__))
+if root not in sys.path:
+    sys.path.insert(0, root)
 
 import os
 import argparse
@@ -64,26 +61,44 @@ def create_parser():
         help="Relax the structures using Rosetta FastRelax."
     )
 
+    parser.add_argument(
+        "--do_reconstruct",
+        action='store_true',
+        help="Reconstruct full complex by combining generated peptide with native receptor from --ori_pdbs."
+    )
+
+    parser.add_argument(
+        "--lig_chain",
+        type=str,
+        default="B",
+        help="Chain ID of the peptide ligand in input PDBs (default: 'B', or 'auto' for shortest chain)."
+    )
+
     return parser
 
 
 def main(args):
     test_files = []
-    for root, dirs, files in os.walk(args.in_pdbs):
-        for file in files:
-            if file.endswith('.pdb'):
-                test_files.append(os.path.join(root, file))
+    for walk_root, dirs, files in os.walk(args.in_pdbs):
+        dirs[:] = [d for d in dirs if d not in ("postprocess_results", "traj")]
+        for file in sorted(files):
+            if not file.endswith('.pdb'):
+                continue
+            if file.endswith('_final.pdb') or file.startswith(('input_', 'noised_', 'predicted_')):
+                continue
+            test_files.append(os.path.join(walk_root, file))
     
-    print(f'Start postprocessing of peptides...')
+    print(f'Start postprocessing of {len(test_files)} peptides...')
     postprocess_metric_parallel(
         files=test_files,
         ori_dir=args.ori_pdbs,
         nproc=args.nproc,
-        lig_chain_ids=['B' for _ in test_files],
+        lig_chain_ids=[args.lig_chain for _ in test_files],
         xml=args.postprocess_xml_path,
         out_path=os.path.join(args.in_pdbs, 'postprocess_results.csv'),
         amber_relax=args.amber_relax,
-        rosetta_relax=args.rosetta_relax
+        rosetta_relax=args.rosetta_relax,
+        do_reconstruct=args.do_reconstruct,
     )
     print(f'Finished postprocessing of {len(test_files)} peptides.')
 

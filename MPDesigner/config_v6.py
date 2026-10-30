@@ -94,6 +94,7 @@ BATCH_FEATURES = {
     "relative_positions": [N_RES, N_RES],
     "distogram": [N_RES, N_RES],
     "diffused_distogram": [N_RES, N_RES],
+    "initial_center": [3],
 }
 
 def base_config():

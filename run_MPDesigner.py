@@ -139,6 +139,8 @@ def main(args):
                 batch['diffused_frames'] = new_frame_diffused.to_tensor_4x4()
 
             batch = model.convert_input_device(batch, args.device)
+            if pocket_center is not None:
+                batch = update_features(batch, config.data)
             rep_name = f"{job.id}_rep{replica:03d}_seed{seed:05d}"
 
             # create denoise time stamps
@@ -227,11 +229,21 @@ def main(args):
                 batch["diffusion_t"] = s
                 batch = update_features(batch, config.data)
 
-            # --- STEP 3: TRANSLATE BACK (AFTER THE LOOP) ---
+            # --- STEP 3: TRANSLATE BACK (AFTER THE LOOP) & RESTORE FIXED SEQUENCE ---
+            sh_0 = torch.where(
+                batch["seq_gen_mask"][..., None] > 0,
+                sh_0,
+                batch["aalogits"].to(sh_0.dtype),
+            )
+            total_offset = torch.zeros(3, dtype=fh_0.dtype, device=fh_0.device)
             if pocket_center is not None:
+                total_offset = total_offset + pocket_center.to(device=fh_0.device, dtype=fh_0.dtype)
+            if "initial_center" in batch and batch["initial_center"] is not None:
+                total_offset = total_offset + batch["initial_center"].to(device=fh_0.device, dtype=fh_0.dtype)
+            if torch.any(total_offset != 0):
                 logging.info("Translating final structure back to original coordinates.")
                 frame_final = Frame.from_tensor_4x4(fh_0)
-                trans_final = frame_final.get_trans() + pocket_center[None, :]
+                trans_final = frame_final.get_trans() + total_offset[None, :]
                 new_frame_final = Frame(frame_final.get_rots(), trans_final)
                 fh_0 = new_frame_final.to_tensor_4x4()
 

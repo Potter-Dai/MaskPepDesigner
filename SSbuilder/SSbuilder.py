@@ -1,14 +1,19 @@
-import pyrootutils
-
-# See: https://github.com/ashleve/pyrootutils
-root = pyrootutils.setup_root(
-    search_from=__file__,
-    indicator=[".git"],
-    pythonpath=True,
-    dotenv=True
-)
+try:
+    import pyrootutils
+    root = pyrootutils.setup_root(
+        search_from=__file__,
+        indicator=[".git", "setup.py", "MPDESIGNER_README.md"],
+        pythonpath=True,
+        dotenv=True
+    )
+except Exception:
+    import os, sys
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if root not in sys.path:
+        sys.path.insert(0, root)
 
 import os
+import copy
 from typing import List
 import numpy as np
 from numpy import dot, transpose, sqrt
@@ -358,11 +363,15 @@ class SS_geo:
         CAs = {}
         CBs = {}
         self.geo_as = {}
+        res_keys = list(s.residues.keys())
+        res_key_to_idx = {rk: idx for idx, rk in enumerate(res_keys)}
+        preserve_set = set(index_preserve)
         for i in s.coords:
             m = i.split('_')
-            if int(m[1]) in index_preserve:
-                continue
             idt = m[0] + '_' + m[1] + '_' + m[2]
+            res_idx = res_key_to_idx.get(idt, int(m[1]) - 1)
+            if res_idx in preserve_set:
+                continue
             if i.split('_')[-1] == 'CA':
                 CAs[idt] = s.coords[i]
             elif i.split('_')[-1] == 'CB':
@@ -374,7 +383,9 @@ class SS_geo:
                     self.geo_as[i] = [CAs[i],CBs[j]]
         for i in self.geo_as:
             for j in self.geo_as:
-                if int(i.split('_')[1]) + 2 <= int(j.split('_')[1]):
+                idx_i = res_key_to_idx.get(i, int(i.split('_')[1]) - 1)
+                idx_j = res_key_to_idx.get(j, int(j.split('_')[1]) - 1)
+                if idx_i + 2 <= idx_j:
                     self.geo[i+'@'+j] = self._compute_geo(self.geo_as[i], self.geo_as[j])
         # print(self.geo)
 
@@ -488,6 +499,7 @@ def norm_residues(residues):
 def cys_terminal(s, ss_prob, bf_th):
     # print(s.pdb_atoms)
     assert len(s.seq) == len(ss_prob) 
+    res_key_to_idx = {rk: idx for idx, rk in enumerate(s.residues.keys())}
     index_preserve = [i for i in range(len(ss_prob)) if ss_prob[i] <= bf_th]
     # print(index_preserve)
     ss_geo = SS_geo(s, index_preserve).geo
@@ -503,9 +515,9 @@ def cys_terminal(s, ss_prob, bf_th):
     for i in ss_terminal:
         sim_ss =  compare_ss(i, s.ss_terminal)
         if sim_ss != []:
-            bfsi = cal_bfs_ss(i, ss_prob)
+            bfsi = cal_bfs_ss(i, ss_prob, res_key_to_idx)
             for j in sim_ss:
-                bfsj = cal_bfs_ss(j, ss_prob)
+                bfsj = cal_bfs_ss(j, ss_prob, res_key_to_idx)
                 # print(bfsi, bfsj)
                 if bfsi >= bfsj:
                     s.ss_terminal.remove(j)
@@ -531,13 +543,29 @@ def compare_ss(st1,ss_all):
                     sts.append(st)
     return sts
 
-def cal_bfs_ss(st, ss_prob):
+def cal_bfs_ss(st, ss_prob, res_key_to_idx=None):
     sts = st.split('@')
-    return ss_prob[int(sts[0].split('_')[1])-1] + ss_prob[int(sts[1].split('_')[1])-1]
+    if res_key_to_idx is not None and sts[0] in res_key_to_idx and sts[1] in res_key_to_idx:
+        idx0 = res_key_to_idx[sts[0]]
+        idx1 = res_key_to_idx[sts[1]]
+    else:
+        idx0 = int(sts[0].split('_')[1]) - 1
+        idx1 = int(sts[1].split('_')[1]) - 1
+    return ss_prob[idx0] + ss_prob[idx1]
 
 def read_ssdata(datapath):
+    if not os.path.isdir(datapath):
+        tar_candidate = os.path.join(os.path.dirname(os.path.abspath(__file__)), "SSBLIB.tar.gz")
+        if os.path.isfile(tar_candidate):
+            import tarfile
+            extract_dir = os.path.dirname(os.path.abspath(__file__))
+            with tarfile.open(tar_candidate, "r:gz") as tf:
+                tf.extractall(path=extract_dir)
+            default_extracted = os.path.join(extract_dir, "SSBLIB")
+            if os.path.isdir(default_extracted) and not os.path.isdir(datapath):
+                datapath = default_extracted
     database = {}
-    datapath = [os.path.join(datapath,i) for i in os.listdir(datapath)]
+    datapath = [os.path.join(datapath,i) for i in sorted(os.listdir(datapath)) if i.endswith('.pdb')]
     for i in datapath:
         database[i] = Structure(i)
     return database
@@ -547,17 +575,19 @@ def read_ssdata(datapath):
 def build_ssbond(s:Structure, database, max_num, lig_ch):
     ss_residues = []
     count = 0
-    rms_min = 1000000
     # print(list(s.coords.keys()))
     ss_residues_ind = []
     for i in s.ss_terminal:
         ss_residues.append(i.split('@'))
         ss_residues_ind += i.split('@')
     for i in ss_residues:
-        
+        rms_min = float('inf')
+        rs_picked = None
+        ss_picked = None
+        best_transformed_coords = None
         cs1 = np.array([s.coords[i[0]+'_CA'], s.coords[i[1]+'_CA'], s.coords[i[0]+'_CB'], s.coords[i[1]+'_CB']])
-        for ss in database:
-            ss = database[ss]
+        for ss_key in database:
+            ss = database[ss_key]
             CAs = []
             CBs = []
             for j in ss.coords:
@@ -571,34 +601,37 @@ def build_ssbond(s:Structure, database, max_num, lig_ch):
                 rms_min = rms
                 rs_picked = i
                 ss_picked = ss
-                transformed_coords = (dot(dict2matrix(ss.coords), rot) + tran).round(2)
-                ss.update_pdb_coords(transformed_coords)
+                best_transformed_coords = (dot(dict2matrix(ss.coords), rot) + tran).round(2)
+        if ss_picked is None:
+            continue
+        ss_picked = copy.deepcopy(ss_picked)
+        ss_picked.update_pdb_coords(best_transformed_coords)
         # print(rs_picked[0])
         s.residues[rs_picked[0]] = s.residues[rs_picked[0]][0:4]
         s.residues[rs_picked[1]] = s.residues[rs_picked[1]][0:4]
-        ss_keys = [i for i in ss_picked.residues.keys()]
+        ss_keys = [k for k in ss_picked.residues.keys()]
         s.residues[rs_picked[0]] += ss_picked.residues[ss_keys[0]][4:]
         s.residues[rs_picked[1]] += ss_picked.residues[ss_keys[1]][4:]
 
-        for i in range(6):
+        for idx_atom in range(6):
             sc = {'4':'C', '5':'S' }
-            if i < 4:
-                atom0 = s.residues[rs_picked[0]][i]
-                atom1 = s.residues[rs_picked[1]][i]
+            if idx_atom < 4:
+                atom0 = s.residues[rs_picked[0]][idx_atom]
+                atom1 = s.residues[rs_picked[1]][idx_atom]
                 atom0 = atom0[0:17] + 'CYS' + atom0[20:]
-                s.residues[rs_picked[0]][i] = atom0
+                s.residues[rs_picked[0]][idx_atom] = atom0
                 atom1 = atom1[0:17] + 'CYS' + atom1[20:]
-                s.residues[rs_picked[1]][i] = atom1
-            elif i >= 4:
+                s.residues[rs_picked[1]][idx_atom] = atom1
+            elif idx_atom >= 4:
                 atom_norm0 = s.residues[rs_picked[0]][0]
                 atom_norm1 = s.residues[rs_picked[1]][0]
-                atom0 = s.residues[rs_picked[0]][i]
-                atom1 = s.residues[rs_picked[1]][i]
-                atom0 = atom0[0:21] + atom_norm0[21:26] + atom0[26:54] + atom_norm0[54:76] + sc[str(i)].rjust(2) + '\n'
+                atom0 = s.residues[rs_picked[0]][idx_atom]
+                atom1 = s.residues[rs_picked[1]][idx_atom]
+                atom0 = atom0[0:21] + atom_norm0[21:26] + atom0[26:54] + atom_norm0[54:76] + sc[str(idx_atom)].rjust(2) + '\n'
                 # print(atom0)
-                s.residues[rs_picked[0]][i] = atom0
-                atom1 = atom1[0:21] + atom_norm1[21:26] + atom1[26:54] + atom_norm1[54:76] + sc[str(i)].rjust(2) + '\n'
-                s.residues[rs_picked[1]][i] = atom1
+                s.residues[rs_picked[0]][idx_atom] = atom0
+                atom1 = atom1[0:21] + atom_norm1[21:26] + atom1[26:54] + atom_norm1[54:76] + sc[str(idx_atom)].rjust(2) + '\n'
+                s.residues[rs_picked[1]][idx_atom] = atom1
                 # print(atom0, atom1, atom_norm0, atom_norm1)
         s.pdb_atoms = residues2atoms(s.residues)
         s.norm_pdb_atoms(lig_ch)

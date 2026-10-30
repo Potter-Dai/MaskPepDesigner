@@ -134,7 +134,9 @@ def make_initial_frames(
     atom_pos, atom_mask = protein["all_atom_positions"], protein["all_atom_mask"]
     # 从 protein 字典中获取 centering_mask_idx 并传递
     centering_idx = protein.get("centering_mask_idx", None)
-    atom_pos = remove_center(atom_pos, atom_mask, eps, centering_mask_idx=centering_idx)
+    atom_pos, initial_center = remove_center(
+        atom_pos, atom_mask, eps, centering_mask_idx=centering_idx, return_center=True
+    )
 
     if use_random_rotations:
         with numpy_seed(augmentation_seed, 0, key="random_rotation"):
@@ -159,7 +161,8 @@ def make_initial_frames(
     protein.update({
         "all_atom_positions": atom_pos,
         "frames": frames,
-        "frame_mask": frame_mask
+        "frame_mask": frame_mask,
+        "initial_center": initial_center,
     })
 
     return protein
@@ -171,7 +174,8 @@ def remove_center(
     all_atom_positions: torch.Tensor,
     all_atom_mask: torch.Tensor,
     eps: float = 1e-8,
-    centering_mask_idx: Optional[torch.Tensor] = None, # <--- 添加新参数
+    centering_mask_idx: Optional[torch.Tensor] = None,
+    return_center: bool = False,
 ):
     """
     Moves the center of a selected subset of residues (or all residues) to the origin.
@@ -188,11 +192,14 @@ def remove_center(
 
     # 计算中心点 (centre) 的逻辑不变
     centre = (pos * msk).sum(dim=-2, keepdim=True) / (msk.sum(dim=-2, keepdim=True)).clamp_min(eps)
+    centre_vec = centre.squeeze(-2).clone()
 
     # 将平移应用于所有的原子坐标 (all_atom_positions)
-    all_atom_positions -= centre[..., :, None, :]
-    all_atom_positions *= all_atom_mask[..., None]
+    all_atom_positions = all_atom_positions - centre[..., :, None, :]
+    all_atom_positions = all_atom_positions * all_atom_mask[..., None]
 
+    if return_center:
+        return all_atom_positions, centre_vec
     return all_atom_positions
 
 
@@ -535,25 +542,22 @@ def get_spatial_crop_index(
     peptide_indices = torch.where(chain_id == 2.)[0]
 
     # Determine hotspot residues based on hpmask
-    if hpmask is not None:
-        # Case 1: hpmask exists
+    if hpmask is not None and torch.any(hpmask == 1.):
+        # Case 1: explicit hpmask exists and has active hotspot residues
         hpmask_indices = torch.where(hpmask == 1.)[0]
-        if len(hpmask_indices) == 0:
-            raise ValueError("No residues with hpmask == 1 found.")
-        # min_distances = compute_min_distances(ca_coords, protein_indices, hpmask_indices)
-        # pocket_indices = protein_indices[min_distances <= 10.0]
         hotspot_indices = hpmask_indices
     else:
-        # Case 2: hpmask is None
-        peptide_ca_indices = torch.where(chain_id == 2.)[0]
+        # Case 2: hpmask is None or all zeros -> infer 8 Å contact hotspots from reference peptide
+        peptide_ca_indices = torch.where((chain_id == 2.) & (ca_mask > 0.))[0]
         if len(peptide_ca_indices) == 0:
-            raise ValueError("No peptide residues with ca_mask == 1 found.")
+            raise ValueError(
+                "No hotspot residues (hpmask == 1) and no reference peptide coordinates found. "
+                "Please specify receptor hotspots {...} in contig for de novo generation."
+            )
         min_distances_to_peptide = compute_min_distances(ca_coords, protein_indices, peptide_ca_indices)
         contact_indices = protein_indices[min_distances_to_peptide <= 8.0]
         if len(contact_indices) == 0:
             raise ValueError("No contact residues found within 8 Å of peptide.")
-        # min_distances_to_contact = compute_min_distances(ca_coords, protein_indices, contact_indices)
-        # motif_indices = protein_indices[min_distances_to_contact <= 10.0]
         hotspot_indices = contact_indices
 
     # `indices_for_centering` 只包含热点残基，将用它来定义中心点
@@ -563,8 +567,8 @@ def get_spatial_crop_index(
     if chain_id.shape[0] <= crop_size:
         return torch.arange(chain_id.shape[0]), indices_for_centering
 
-    # 1. if num. residues with structures is within crop size, return them all and sample some no-structure residues.
-    if (ca_mask.sum() <= crop_size): # 这是说：假如有的残基没有CA原子
+    # 1. if num. residues with structures is within crop size (and no peptide chain), return them all and sample some no-structure residues.
+    if (ca_mask.sum() <= crop_size) and len(peptide_indices) == 0:
         with_structure_index = torch.nonzero(ca_mask)[:, 0]
         to_pad = crop_size - with_structure_index.shape[0]
         if to_pad:
@@ -579,12 +583,14 @@ def get_spatial_crop_index(
 
     # 2. find hpmask residues and compute the geometric center of them, and return nearest residues.
     else:
-        # Combine peptide and hotspot indices
-        ref_indices = torch.cat([peptide_indices, hotspot_indices])
-        # Get CA coordinates of residues with chain_id > 1
+        if len(peptide_indices) > crop_size:
+            raise ValueError(f"Peptide length ({len(peptide_indices)}) exceeds crop_size ({crop_size}).")
+        # Combine structured peptide residues (if any) and hotspot indices as spatial reference
+        valid_pep_indices = peptide_indices[ca_mask[peptide_indices] > 0.]
+        ref_indices = torch.cat([valid_pep_indices, hotspot_indices])
         ref_ca_coords = ca_coords[ref_indices]
 
-        # Compute pairwise distances from all residues to ligmask residues
+        # Compute pairwise distances from all residues to reference residues
         ca_diff = ca_coords.unsqueeze(0) - ref_ca_coords.unsqueeze(1)
         ca_sq_distances = ca_diff.square().sum(dim=-1)
         min_distances, _ = ca_sq_distances.min(dim=0)

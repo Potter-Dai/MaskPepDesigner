@@ -45,7 +45,7 @@ def calc_tm_score(pos_1, pos_2, seq_1, seq_2):
 
 def calc_aligned_rmsd(pos_1, pos_2):
     aligned_pos_1 = du.rigid_transform_3D(pos_1, pos_2)[0]
-    return np.mean(np.linalg.norm(aligned_pos_1 - pos_2, axis=-1))
+    return np.sqrt(np.mean(np.sum((aligned_pos_1 - pos_2) ** 2, axis=-1)))
 
 
 def calc_rmsd(pos_1, pos_2, flip_align=True):
@@ -56,9 +56,9 @@ def calc_rmsd(pos_1, pos_2, flip_align=True):
         rmsd: Calculated minimum RMSD value.
         flip: Boolean flag indicating whether the head-to-tail alignment was used.
     """
-    rmsd = np.mean(np.linalg.norm(pos_1 - pos_2, axis=-1))
+    rmsd = np.sqrt(np.mean(np.sum((pos_1 - pos_2) ** 2, axis=-1)))
     pos_1_reverse = np.flip(pos_1, axis=0)
-    rmsd_reverse = np.mean(np.linalg.norm(pos_1_reverse - pos_2, axis=-1))
+    rmsd_reverse = np.sqrt(np.mean(np.sum((pos_1_reverse - pos_2) ** 2, axis=-1)))
     if flip_align:
         flip = rmsd_reverse < rmsd
         rmsd = rmsd_reverse if flip else rmsd
@@ -169,15 +169,16 @@ def postprocess_metric(
     lig_chain_id: Optional[str],
     xml: Optional[str],
     amber_relax: bool = False,
-    rosetta_relax: bool = False
+    rosetta_relax: bool = False,
+    do_reconstruct: bool = False,
 ):
     print(f"Running postprocessing protocol on {pdb_file}")
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure("", pdb_file)[0]
     all_chains = [chain.id for chain in structure.get_chains()]
-    if lig_chain_id is not None:
+    if lig_chain_id is not None and lig_chain_id in all_chains:
         all_chains.remove(lig_chain_id)
-    else:
+    elif lig_chain_id is None:
         lig_chain_id = all_chains[0] if all_chains else None
     if not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
@@ -189,7 +190,8 @@ def postprocess_metric(
             out_dir=out_dir,
             xml=xml,
             amber_relax=amber_relax,
-            rosetta_relax=rosetta_relax
+            rosetta_relax=rosetta_relax,
+            do_reconstruct=do_reconstruct,
         )
         postprocess()
     except Exception as e:
@@ -204,7 +206,8 @@ def postprocess_metric_parallel(
     xml: Optional[str] = None,
     out_path: str = "./postprocess_results.csv",
     amber_relax: bool = False,
-    rosetta_relax: bool = False
+    rosetta_relax: bool = False,
+    do_reconstruct: bool = False,
 ):
     if lig_chain_ids is not None:
         if len(lig_chain_ids) != len(files):
@@ -216,21 +219,23 @@ def postprocess_metric_parallel(
     score_files = set()
     for pdb_file, lig_chain_id in zip(files, lig_chain_ids):
         out_dir = os.path.dirname(pdb_file)
-        args_list.append((pdb_file, ori_dir, out_dir, lig_chain_id, xml, amber_relax, rosetta_relax))
+        args_list.append((pdb_file, ori_dir, out_dir, lig_chain_id, xml, amber_relax, rosetta_relax, do_reconstruct))
         score_files.add(os.path.join(out_dir, "postprocess_results", "rosetta_score.sc"))
 
     with mp.Pool(nproc) as pool:
         pool.starmap(postprocess_metric, args_list)
 
-    for score_file in score_files:
+    existing_score_files = []
+    for score_file in sorted(score_files):
         if not os.path.exists(score_file):
             print(f"Warning: score file {score_file} does not exist.")
-            score_files.remove(score_file)
+        else:
+            existing_score_files.append(score_file)
 
-    if not score_files:
+    if not existing_score_files:
         print("No score files found. Exiting.")
         return
 
-    df = summarize_statistics(list(score_files))
+    df = summarize_statistics(existing_score_files)
     df.to_csv(out_path)
     print(f"Postprocessing metrics saved to {out_path}")

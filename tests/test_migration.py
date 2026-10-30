@@ -174,6 +174,8 @@ assert segments[1][0].is_ligand
 
     def test_launchers_validate_argument_count(self):
         for script in ROOT.glob('*MPDesigner*.sh'):
+            if script.name.startswith('.'):
+                continue
             result = subprocess.run(['bash', str(script)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 2, script.name)
             self.assertIn('Usage:', result.stderr)
@@ -184,6 +186,56 @@ assert segments[1][0].is_ligand
         for name in ('MPDesigner.inference', 'MPDesigner.losses', 'diffold.inference', 'diffold.losses'):
             self.assertIn(name, packages)
         self.assertTrue((ROOT/'MPDesigner/data/plddt_spline.pkl.gz').is_file())
+
+    def test_ssbuilder_zero_based_preserve_and_non_mutating_build(self):
+        ns = extracted('SSbuilder/SSbuilder.py', [
+            'Structure', 'SVDSuperimposer', 'SS_geo', 'superimpose',
+            'dict2matrix', 'residues2atoms', 'cys_terminal', 'compare_ss',
+            'cal_bfs_ss', 'build_ssbond'
+        ], {
+            'os': os, 'copy': copy, 'List': list, 'np': np,
+            'dot': np.dot, 'transpose': np.transpose, 'sqrt': np.sqrt,
+            'svd': np.linalg.svd, 'det': np.linalg.det,
+            'aa': {'GLY': 'G', 'ALA': 'A', 'CYS': 'C'},
+        })
+        # Verify SS_geo maps 0-based index_preserve to the last residue (1-based resid=4)
+        with tempfile.TemporaryDirectory() as tmp:
+            pdb_path = Path(tmp) / 'pep.pdb'
+            lines = []
+            serial = 1
+            for resid in range(1, 5):
+                for aname, dx, dy, dz in (('N', 0.0, 0.0, 0.0), ('CA', 1.4, 0.0, 0.0),
+                                          ('C', 2.4, 0.0, 0.0), ('O', 3.0, 0.0, 0.0),
+                                          ('CB', 1.4, 1.0, 0.0)):
+                    lines.append(
+                        f"ATOM  {serial:5d} {aname:<4s} ALA B{resid:4d}    "
+                        f"{resid*1.2+dx:8.3f}{dy:8.3f}{dz:8.3f}  1.00  1.00           C\n"
+                    )
+                    serial += 1
+            pdb_path.write_text(''.join(lines))
+            s = ns['Structure'](str(pdb_path))
+            # Preserve all except resid 1 (index 0); resid 4 (index 3) is in index_preserve
+            geo = ns['SS_geo'](s, index_preserve=[1, 2, 3]).geo
+            self.assertEqual(geo, {})
+            # Allow index 0 and index 3 (resid 1 and resid 4)
+            geo2 = ns['SS_geo'](s, index_preserve=[1, 2]).geo
+            self.assertIn('B_1_A@B_4_A', geo2)
+
+    def test_find_matching_original_pdb(self):
+        import glob
+        ns = extracted('run_rescon_com.py', ['find_matching_original_pdb'], {'os': os, 'glob': glob})
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / '8qza_protein_A_peptide_B_107_132_loop.pdb'
+            target.write_text('END\n')
+            found = ns['find_matching_original_pdb'](
+                'out_8qza_protein_A_peptide_B_107_132_loop_rep000_seed12345.pdb', tmp
+            )
+            self.assertEqual(found, str(target))
+            # Also test task_id style filename matching unique 4-char PDB prefix
+            found2 = ns['find_matching_original_pdb'](
+                'out_8qza_denovo_s50_rep000_seed12345.pdb', tmp
+            )
+            self.assertEqual(found2, str(target))
 
 
 if __name__ == '__main__':
