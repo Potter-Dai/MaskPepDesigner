@@ -9,7 +9,15 @@ This repository provides the official implementation of **MaskPepDesigner (MPD)*
 
 > **MaskPepDesigner** is developed upon [DP Technology Uni-Fold](https://github.com/dptech-corp/Uni-Fold) and [AlphaFold2](https://github.com/deepmind/alphafold), with postprocessing modules adapted from [DiffPepBuilder](https://github.com/YuzheWangPKU/DiffPepBuilder). We thank the original authors for open-sourcing their work.
 
-![MaskPepDesigner Overview](img/mpdesigner_overview.png)
+<p align="center">
+  <img src="img/fig1_architecture.png" width="92%" alt="Figure 1. Architecture of the MaskPepDesigner generative framework"><br>
+  <em><b>Figure 1. Architecture of the MaskPepDesigner generative framework</b></em>
+</p>
+
+<p align="center">
+  <img src="img/fig2_dataset.png" width="92%" alt="Figure 2. Construction and structural characterization of the Cyclic-like dataset"><br>
+  <em><b>Figure 2. Construction and structural characterization of the Cyclic-like dataset</b></em>
+</p>
 
 ---
 
@@ -34,11 +42,11 @@ This repository provides the official implementation of **MaskPepDesigner (MPD)*
 ### 1) Environment Setup
 
 #### Option A: Unified Singularity / Apptainer Container (Recommended)
-A pre-built container (`mpdesigner_diffpepbuilder.sif`) integrates `MaskPepDesigner`, `Uni-Core`, `PyTorch 2.2.0 (CUDA 11.8)`, `OpenMM 8.0`, `PDBFixer`, and `PyRosetta` in a single Conda environment (`/opt/miniconda3/envs/mpdesigner`), eliminating the need to switch environments between generation and postprocessing:
+A pre-built container (`mpdesigner.sif`) integrates `MaskPepDesigner`, `Uni-Core`, `PyTorch 2.2.0 (CUDA 11.8)`, `OpenMM 8.0`, `PDBFixer`, and `PyRosetta` in a single Conda environment (`/opt/miniconda3/envs/mpdesigner`), eliminating the need to switch environments between generation and postprocessing:
 
 ```bash
 singularity exec --nv -B /lustre:/lustre -B /flashfs1:/flashfs1 \
-    /path/to/mpdesigner_diffpepbuilder.sif \
+    /path/to/mpdesigner.sif \
     python run_MPDesigner.py -h
 ```
 
