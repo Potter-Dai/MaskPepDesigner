@@ -228,7 +228,6 @@ MaskPepDesigner/
 ├── run_MPDesigner.py           # Main inference entry point (co-design, folding/docking, inverse folding)
 ├── run_MPDesigner_ss.py        # Inference entry point with integrated SSbuilder disulfide cyclization
 ├── run_postprocess.py          # Parallel batch postprocessing entry point (PDBFixer + Amber + PyRosetta)
-├── run_rescon_com.py           # Standalone SVD complex alignment & full-receptor reconstruction utility
 └── finetune_MPDesigner_peptide.sh # Distributed multi-GPU fine-tuning launcher
 ```
 

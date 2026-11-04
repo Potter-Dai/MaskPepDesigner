@@ -215,21 +215,22 @@ assert segments[1][0].is_ligand
             geo2 = ns['SS_geo'](s, index_preserve=[1, 2]).geo
             self.assertIn('B_1_A@B_4_A', geo2)
 
-    def test_find_matching_original_pdb(self):
-        import glob
-        ns = extracted('run_rescon_com.py', ['find_matching_original_pdb'], {'os': os, 'glob': glob})
+    def test_postprocess_find_ori_file(self):
+        tree = ast.parse((ROOT / 'analysis/postprocess.py').read_text())
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'Postprocess')
+        method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == 'find_ori_file')
+        ns = {'os': os}
+        exec(compile(ast.Module(body=[method], type_ignores=[]), 'find_ori_file', 'exec'), ns)
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / '8qza_protein_A_peptide_B_107_132_loop.pdb'
             target.write_text('END\n')
-            found = ns['find_matching_original_pdb'](
-                'out_8qza_protein_A_peptide_B_107_132_loop_rep000_seed12345.pdb', tmp
+            dummy_self = types.SimpleNamespace(
+                ori_dir=tmp,
+                pdb_file=str(Path(tmp) / 'out_8qza_denovo_s50_rep000_seed12345.pdb'),
+                data_id='out_8qza_denovo_s50_rep000_seed12345',
             )
+            found = ns['find_ori_file'](dummy_self)
             self.assertEqual(found, str(target))
-            # Also test task_id style filename matching unique 4-char PDB prefix
-            found2 = ns['find_matching_original_pdb'](
-                'out_8qza_denovo_s50_rep000_seed12345.pdb', tmp
-            )
-            self.assertEqual(found2, str(target))
 
 
 if __name__ == '__main__':
