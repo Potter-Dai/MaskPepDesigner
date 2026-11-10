@@ -95,6 +95,7 @@ def to_pdb_string(
     chain_id: torch.Tensor,
     b_factor: torch.Tensor = None,
     model_id: int = 1,
+    end_of_file: bool = True,
 ):
     # n_ca_c = n_ca_c_trans.to(frames.device)
     aatype = aalogits[..., :20].argmax(dim=-1)  # L
@@ -120,7 +121,18 @@ def to_pdb_string(
 
     prot = Protein(**prot_dict)
     ret = to_pdb(prot, model_id)
+    if not end_of_file:
+        lines = [line for line in ret.splitlines() if line.strip() != "END"]
+        ret = "\n".join(lines) + "\n"
     return ret
+
+
+def translate_frames(frames: torch.Tensor, offset: Optional[torch.Tensor]) -> torch.Tensor:
+    if offset is None or not torch.any(offset != 0):
+        return frames
+    frame_obj = Frame.from_tensor_4x4(frames)
+    trans = frame_obj.get_trans() + offset.to(device=frames.device, dtype=frames.dtype)[None, :]
+    return Frame(frame_obj.get_rots(), trans).to_tensor_4x4()
 
 def save_pdb(
     path: str,

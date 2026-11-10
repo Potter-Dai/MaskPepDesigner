@@ -195,9 +195,18 @@ def main(args):
                 key: batch[key] for key in ("seq_mask", "residue_index", "chain_id")
             }
 
+            total_offset = torch.zeros(3, dtype=batch["frames"].dtype, device=batch["frames"].device)
+            if pocket_center is not None:
+                total_offset = total_offset + pocket_center.to(device=total_offset.device, dtype=total_offset.dtype)
+            if "initial_center" in batch and batch["initial_center"] is not None:
+                total_offset = total_offset + batch["initial_center"].to(device=total_offset.device, dtype=total_offset.dtype)
+
             utils.save_pdb(
                 os.path.join(output_traj_dir, f"input_{rep_name}.pdb"),
-                batch["aalogits"], batch["frames"], **batch_constants, b_factor=None
+                batch["aalogits"],
+                utils.translate_frames(batch["frames"], total_offset),
+                **batch_constants,
+                b_factor=None,
             )
             if job.save_trajectory:
                 noised_traj_path = os.path.join(output_traj_dir, f"noised_{rep_name}.pdb")
@@ -227,10 +236,37 @@ def main(args):
 
                 # saving intermediate results
                 if job.save_trajectory:
+                    s_t_vis = torch.where(
+                        batch["seq_gen_mask"][..., None] > 0,
+                        s_t,
+                        batch["aalogits"].to(s_t.dtype),
+                    )
+                    sh_0_vis = torch.where(
+                        batch["seq_gen_mask"][..., None] > 0,
+                        sh_0,
+                        batch["aalogits"].to(sh_0.dtype),
+                    )
                     with open(noised_traj_path, "a") as f:
-                        f.write(utils.to_pdb_string(s_t, f_t, **batch_constants, model_id=i+1,))
+                        f.write(
+                            utils.to_pdb_string(
+                                s_t_vis,
+                                utils.translate_frames(f_t, total_offset),
+                                **batch_constants,
+                                model_id=i+1,
+                                end_of_file=False,
+                            )
+                        )
                     with open(predicted_traj_path, "a") as f:
-                        f.write(utils.to_pdb_string(sh_0, fh_0, **batch_constants, model_id=i+1,))
+                        f.write(
+                            utils.to_pdb_string(
+                                sh_0_vis,
+                                utils.translate_frames(fh_0, total_offset),
+                                **batch_constants,
+                                b_factor=b_factor,
+                                model_id=i+1,
+                                end_of_file=False,
+                            )
+                        )
 
                 if job.save_embedding != "none":
                     single_repr, pair_repr = out["single"], out["pair"]
@@ -271,22 +307,21 @@ def main(args):
                 batch["diffusion_t"] = s
                 batch = update_features(batch, config.data)
 
+            if job.save_trajectory:
+                end_line = "END".ljust(80) + "\n"
+                with open(noised_traj_path, "a") as f:
+                    f.write(end_line)
+                with open(predicted_traj_path, "a") as f:
+                    f.write(end_line)
+
             sh_0 = torch.where(
                 batch["seq_gen_mask"][..., None] > 0,
                 sh_0,
                 batch["aalogits"].to(sh_0.dtype),
             )
-            total_offset = torch.zeros(3, dtype=fh_0.dtype, device=fh_0.device)
-            if pocket_center is not None:
-                total_offset = total_offset + pocket_center.to(device=fh_0.device, dtype=fh_0.dtype)
-            if "initial_center" in batch and batch["initial_center"] is not None:
-                total_offset = total_offset + batch["initial_center"].to(device=fh_0.device, dtype=fh_0.dtype)
             if torch.any(total_offset != 0):
                 logging.info("Translating final structure back to original coordinates.")
-                frame_final = Frame.from_tensor_4x4(fh_0)
-                trans_final = frame_final.get_trans() + total_offset[None, :]
-                new_frame_final = Frame(frame_final.get_rots(), trans_final)
-                fh_0 = new_frame_final.to_tensor_4x4()
+                fh_0 = utils.translate_frames(fh_0, total_offset)
 
             # save final results
             utils.save_pdb(
