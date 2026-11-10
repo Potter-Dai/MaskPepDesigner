@@ -10,13 +10,8 @@ This repository provides the official implementation of **MaskPepDesigner (MPD)*
 > **MaskPepDesigner** is developed upon [DP Technology Uni-Fold](https://github.com/dptech-corp/Uni-Fold) and [AlphaFold2](https://github.com/deepmind/alphafold), with postprocessing modules adapted from [DiffPepBuilder](https://github.com/YuzheWangPKU/DiffPepBuilder). We thank the original authors for open-sourcing their work.
 
 <p align="center">
-  <img src="img/fig1_architecture.png" width="92%" alt="Figure 1. Architecture of the MaskPepDesigner generative framework"><br>
-  <em><b>Figure 1. Architecture of the MaskPepDesigner generative framework</b></em>
-</p>
-
-<p align="center">
-  <img src="img/fig2_dataset.png" width="92%" alt="Figure 2. Construction and structural characterization of the Cyclic-like dataset"><br>
-  <em><b>Figure 2. Construction and structural characterization of the Cyclic-like dataset</b></em>
+  <img src="img/Fig1.png" width="92%" alt="Figure 1. Schematic representation of the MaskPepDesigner pipeline."><br>
+  <em><b>Figure 1. Schematic representation of the MaskPepDesigner pipeline.</b></em>
 </p>
 
 ---

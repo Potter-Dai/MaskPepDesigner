@@ -7,3 +7,7 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# Legacy figures retained locally
+/img/fig1_architecture.png
+/img/fig2_dataset.png
